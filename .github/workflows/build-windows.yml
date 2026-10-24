@@ -53,7 +53,9 @@ jobs:
         run: |
           set -x
           echo "workspace=${GITHUB_WORKSPACE:-unset} pwd=$(pwd)"
-          bash build.sh
+          command -v bash || true
+          ls -l build.sh
+          /usr/bin/bash build.sh
 
       - name: NVIDIA DLSS SDK (headers, import library, runtime)
         shell: pwsh
@@ -90,7 +92,7 @@ jobs:
         run: |
           set -x
           echo "workspace=${GITHUB_WORKSPACE:-unset} pwd=$(pwd)"
-          bash packaging/windows/package_sotc.sh
+          /usr/bin/bash packaging/windows/package_sotc.sh
 
       - name: Upload the package
         uses: actions/upload-artifact@v4
