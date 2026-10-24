@@ -46,6 +46,25 @@ them:
 - Large refactors, deliberately not merged: `e6faa2e3` garbage collector part 2, `8e23388a`
   renderer optimizations, `4ddaada8` num buffers, `fca10b26` remove batching.
 
+## Stopping point (2026-10-25)
+
+Ten fixes were taken (the table above). The rest of the 98 commits fall into three groups and
+none should be merged without a Windows run:
+
+1. **Already in SotC** — checked and listed above.
+2. **Texture/depth refactors** (`7e778987`, `fecfbed0`, `626f3ace`, `92c7a884`, `b3d46e96`,
+   `e6faa2e3`, `8e23388a`): SotC's texture cache, depth/stencil association and buffer cache have
+   diverged heavily (parked twins, guest-stack tracking, GPU readbacks). Applying the upstream
+   hunks in isolation would either not compile or silently change behaviour that only a run can
+   validate.
+3. **Instruction coverage that SotC may never hit** (`08225c2b`, `c1b26558` is in, `e754ce62`,
+   `f0ea8eb7` is in, …): safe in principle, but each one changes shader output and forces a cache
+   rebuild; there is no way to tell from the Linux side whether SotC's shaders use the path.
+
+The 0x490a0 crash is the missing piece for any further stability work: see
+`docs/sotc/CRASH-0x490a0.md`. Until a `.dmp` and `events.log` from a crash exist, more shader
+backports are guesses, not fixes.
+
 ## Rule for taking an upstream fix
 
 1. Apply only the commit's own hunks; do not pull surrounding refactors.
