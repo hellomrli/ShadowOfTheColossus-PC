@@ -9,7 +9,13 @@ tracks what was reviewed from `b4e7ae7..12a45645` (2026-10-24, 98 commits touchi
 | Upstream | What | Why |
 |---|---|---|
 | `524be7c1` | Exclude `GetUserData` from phi folding | User data is a runtime value; folding it into a constant breaks shaders that read different user data on different paths. SotC's SRT walkers read user data heavily. |
-| `78bedfac` | Preserve CFG fallthrough edges (`block.cond = True`, skip break/return/unreachable in `TryFindForwardBlock`, `AddBranch` on the next code block) | SotC already had the `block.cond` line but not the other two. Without them a fallthrough edge could be dropped, producing a shader that skips code. `ShaderBinaryVersion` 33 → 34 invalidates the shader cache. |
+| `78bedfac` | Preserve CFG fallthrough edges (`block.cond = True`, skip break/return/unreachable in `TryFindForwardBlock`, `AddBranch` on the next code block) | SotC already had the `block.cond` line but not the other two. Without them a fallthrough edge could be dropped, producing a shader that skips code. |
+| `f0ea8eb7` | `S_GETREG_B32` / `HW_ID.SE_ID` as virtual shader engine 0 | The opcode was known but had no translator: any shader reading the shader-engine id hit `UNREACHABLE`. SotC's SRT walkers and culling shaders are exactly the kind of code that reads it. |
+| `c34ca21f` | Preserve EXEC scope after an empty branch | One line in `SplitDivergenceScopes`: an empty scope must still open EXEC masking for the next instruction when it is an open-scope one. |
+| `603cff43` | Stable phi deduplication order | The worklist was built from `unordered_map` iteration order, so the same shader could produce different IR between runs. |
+
+`ShaderBinaryVersion` 33 → 35 (all of the above change shader output; the cache is rebuilt on
+first start).
 
 ## Already present in SotC (no action)
 
@@ -18,6 +24,7 @@ tracks what was reviewed from `b4e7ae7..12a45645` (2026-10-24, 98 commits touchi
 | `c01ae7e6` page_manager fault probe limited to the faulting page | `page_manager.cpp` `HandleGuestFault`: `size = min(8, GetNextPageAddr(addr) - addr)`. |
 | `eedf851a` texture cache drops images whose untracked edges the guest overwrote | `texture_cache.cpp` marks `MaybeCpuDirty` in `UntrackImageHead/Tail`; `SafeToDownload()` refuses dirty images, and `RefreshImage` hashes the first texels. Same intent, delayed hashing. |
 | `78bedfac` first hunk (`block.cond`) | `control_flow_graph.cpp:362`. |
+| `bcf083f0` clamp tracked page end to 40 bits | `page_manager.cpp` `EnsurePages`: `end = min(end, 1 << 40) - 1`. |
 | `fb6367d2` 32-bit literals in high dword, `dd43d1ca` `V_CVT_PK_U8_F32`, `94e21778` `V_BFM_B32`, `ef08b1e1` `V_ALIGNBIT`, `d1cb90db` `ADDC`, `2335629` `V_INTERP_MOV_F32`, `d96278e` compute FP mode, `e518a65` `S_SUBB_U32` | Listed in `gpu/VENDOR.txt` (backported before this review). |
 
 ## Candidates left for later (not taken now)
