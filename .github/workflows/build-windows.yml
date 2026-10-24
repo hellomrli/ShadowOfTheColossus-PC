@@ -54,6 +54,8 @@ jobs:
           set -euo pipefail
           # setup-msys2's minimal PATH only has /clang64/bin: add the MSYS2 core utilities.
           export PATH="/usr/bin:/clang64/bin:$PATH"
+          # setup-msys2's MSYS2 root is / ; /c/msys64 is another (stale) install on the runner.
+          export MSYS2_ROOT=/
           pwd
           command -v clang cmake ninja pkg-config git mkdir bash
           echo "PATH=$PATH"
@@ -91,11 +93,13 @@ jobs:
         env:
           # setup-python exports pythonLocation as a Windows path; package_sotc.sh runs it directly.
           WINPYTHON: ${{ env.pythonLocation }}\python.exe
+          MSYS2_ROOT: /
           DLSS_SDK_ROOT: ${{ github.workspace }}\dlss-sdk
           DLSS_BRIDGE: out/dlss-bridge/Release/sotc_dlss.dll
         run: |
           set -euo pipefail
           export PATH="/usr/bin:/clang64/bin:$PATH"
+          export MSYS2_ROOT=/
           bash packaging/windows/package_sotc.sh
 
       - name: Upload the package
