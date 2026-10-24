@@ -19,6 +19,10 @@ inline std::atomic<int> lod_pool_low{-1};
 inline std::atomic<int> fsr1{-1};
 inline std::atomic<int> rcas{-1};
 
+/// DLSS Super Resolution: -1 auto (on when the bridge DLLs and an RTX card are present),
+/// 0 off, 1 on. The menu's "Upscaler" combo sets it; SOTC_DLSS=0 is the startup default.
+inline std::atomic<int> dlss{-1};
+
 /// Far sun shadow cascades drawn on alternate frames (SOTC_SHADOW_REUSE): 0 off, 1 on.
 inline std::atomic<int> shadow_reuse{-1};
 

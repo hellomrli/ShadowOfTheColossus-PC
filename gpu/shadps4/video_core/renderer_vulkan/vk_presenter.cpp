@@ -817,7 +817,8 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
                 {upscale.depth, upscale.depth_view, upscale.depth_format,
                  vk::ImageAspectFlagBits::eDepth, upscale.motion, upscale.motion_view,
                  upscale.jitter_x, upscale.jitter_y, upscale.reset, frame->is_hdr,
-                 static_cast<float>(upscale.width), static_cast<float>(upscale.height), 0.0f},
+                 static_cast<float>(upscale.width), static_cast<float>(upscale.height),
+                 fsr_settings.use_rcas ? std::min(fsr_settings.rcas_attenuation, 1.0f) : 0.0f},
                 1000.0f / 60.0f);
         }
     }
