@@ -573,6 +573,13 @@ private:
         if (forward_node->type == StatementType::Code) {
             return &*forward_node;
         }
+        // A forward block is only usable when the walk can fall through into it; break, return
+        // and unreachable statements cannot (upstream #5365).
+        if (forward_node->type == StatementType::Break ||
+            forward_node->type == StatementType::Return ||
+            forward_node->type == StatementType::Unreachable) {
+            return nullptr;
+        }
         ++forward_node;
     }
     return nullptr;
@@ -628,6 +635,10 @@ private:
                 // Labels can be ignored
                 break;
             case StatementType::Code: {
+                // Keep the fallthrough edge from the previous block (upstream #5365).
+                if (current_block && current_block != stmt.block->ir_block) {
+                    current_block->AddBranch(stmt.block->ir_block);
+                }
                 current_block = stmt.block->ir_block;
                 insert_point = current_block->end();
                 for (auto& node : syntax_list) {
