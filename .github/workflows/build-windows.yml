@@ -51,7 +51,7 @@ jobs:
       - name: Build the port
         shell: msys2 {0}
         run: |
-          cd "$GITHUB_WORKSPACE"
+          cd "$(cygpath -u "$GITHUB_WORKSPACE")"
           bash build.sh
 
       - name: Python for the frozen launcher
@@ -70,7 +70,7 @@ jobs:
           WINPYTHON: ${{ env.pythonLocation }}\python.exe
           MSYS2_ROOT: C:/msys64
         run: |
-          cd "$GITHUB_WORKSPACE"
+          cd "$(cygpath -u "$GITHUB_WORKSPACE")"
           bash packaging/windows/package_sotc.sh
 
       - name: Upload the package
