@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 180
     steps:
       - name: Checkout (with submodules)
@@ -70,14 +70,22 @@ jobs:
           git clone --depth 1 --filter=blob:none --sparse https://github.com/NVIDIA/DLSS.git dlss-sdk
           cd dlss-sdk
           git sparse-checkout set include lib/Windows_x86_64/x64 lib/Windows_x86_64/rel
+          cd ..
+          git clone --depth 1 https://github.com/KhronosGroup/Vulkan-Headers.git vulkan-headers
+
+      - name: MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
 
       - name: Build sotc_dlss.dll (MSVC)
         shell: pwsh
         run: |
-          cmake -S gpu/dlss_bridge -B out/dlss-bridge -G "Visual Studio 17 2022" -A x64 `
+          cmake -S gpu/dlss_bridge -B out/dlss-bridge -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
             -DSOTC_DLSS_SDK_ROOT="$env:GITHUB_WORKSPACE\dlss-sdk" `
-            -DVULKAN_INCLUDE="C:/msys64/clang64/include"
-          cmake --build out/dlss-bridge --config Release
+            -DVULKAN_INCLUDE="$env:GITHUB_WORKSPACE\vulkan-headers\include"
+          cmake --build out/dlss-bridge
 
       - name: Python for the frozen launcher
         uses: actions/setup-python@v5
@@ -95,7 +103,7 @@ jobs:
           WINPYTHON: ${{ env.pythonLocation }}\python.exe
           MSYS2_ROOT: /
           DLSS_SDK_ROOT: ${{ github.workspace }}\dlss-sdk
-          DLSS_BRIDGE: out/dlss-bridge/Release/sotc_dlss.dll
+          DLSS_BRIDGE: out/dlss-bridge/sotc_dlss.dll
         run: |
           set -euo pipefail
           export PATH="/usr/bin:/clang64/bin:$PATH"
