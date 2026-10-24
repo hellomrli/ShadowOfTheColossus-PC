@@ -45,6 +45,25 @@ bool Enabled();
 /// the rasterizer then calls NoteDraw.
 bool CapturingInputs();
 
+/// sotc: DLSS Super Resolution is ready and switched on (sotc_dlss.dll + nvngx_dlss.dll next to
+/// bb-probe.exe, an RTX GPU, SOTC_DLSS not 0). The renderer then captures the G-buffer inputs
+/// even with frame generation off and upscales the presented image.
+bool Upscaling();
+
+/// The inputs DLSS Super Resolution takes from presentation frame `frame_id`: the copied depth
+/// and motion vectors, the camera jitter and a reset after a cut. False when the frame has none.
+struct UpscaleInputs {
+    vk::Image depth;
+    vk::ImageView depth_view;
+    vk::Format depth_format;
+    vk::Image motion;
+    vk::ImageView motion_view;
+    float jitter_x, jitter_y;
+    bool reset;
+    u32 width, height;
+};
+bool GetUpscaleInputs(u32 frame_id, UpscaleInputs& out);
+
 /// The present mode DLSS-G needs (Vulkan: no vsync), when Enabled().
 bool WantsImmediatePresent();
 

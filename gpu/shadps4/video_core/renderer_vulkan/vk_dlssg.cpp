@@ -3,6 +3,7 @@
 
 #include "video_core/renderer_vulkan/vk_dlssg.h"
 #include "video_core/renderer_vulkan/vk_framegen.h"
+#include "video_core/renderer_vulkan/vk_dlss.h"
 #include "video_core/renderer_vulkan/vk_fsrfg.h"
 
 #include <windows.h>
@@ -575,6 +576,10 @@ bool Parallel() {
 
 /// Inputs are captured while DLSS-G or FSR 3 is the frame generation mode.
 bool Capturing() {
+    // DLSS Super Resolution reads the same depth and motion vectors as frame generation.
+    if (Upscaling()) {
+        return g_instance != nullptr;
+    }
     switch (FrameGen::Current()) {
     case FrameGen::Mode::Dlss:
         return supported;
@@ -814,6 +819,18 @@ bool CapturingInputs() {
     return Capturing();
 }
 
+bool Upscaling() {
+    static const bool enabled = [] {
+        const char* v = std::getenv("SOTC_DLSS");
+        return !(v && v[0] == '0');
+    }();
+    if (!enabled) {
+        return false;
+    }
+    const Dlss* dlss = Dlss::Get();
+    return dlss && dlss->Available();
+}
+
 // Streamline asks for vsync off with Vulkan, but DLSS-G generates and paces its frames in
 // Mailbox mode too (measured: 2 frames shown per game frame), without tearing when G-SYNC is
 // off. The requested mode is kept; SOTC_DLSSG_IMMEDIATE=1 switches to Immediate.
@@ -868,7 +885,8 @@ void PrepareInputs(u32 frame_id, vk::CommandBuffer cmdbuf, VideoCore::TextureCac
     f.hudless = {};
     FsrFg::NoDepth(frame_id);
     const bool fsr = FrameGen::Current() == FrameGen::Mode::Fsr;
-    if (!supported && !fsr) {
+    const bool upscale = Upscaling();
+    if (!supported && !fsr && !upscale) {
         pending = Pending{};
         return;
     }
@@ -1215,6 +1233,25 @@ void Suspend() {
         SetOptions(false);
     }
     valid_streak = 0;
+}
+
+bool GetUpscaleInputs(u32 frame_id, UpscaleInputs& out) {
+    if (frame_id >= kMaxFrames || !frames[frame_id].valid) {
+        return false;
+    }
+    const FrameSlot& f = frames[frame_id];
+    const sl::Constants& c = f.constants;
+    out.depth = f.depth;
+    out.depth_view = f.depth_view;
+    out.depth_format = f.depth_format;
+    out.motion = f.mvec;
+    out.motion_view = f.mvec_view;
+    out.jitter_x = c.jitterOffset.x;
+    out.jitter_y = c.jitterOffset.y;
+    out.reset = c.reset == sl::Boolean::eTrue;
+    out.width = f.width;
+    out.height = f.height;
+    return true;
 }
 
 bool GetFrameInputs(u32 frame_id, FrameInputs& out) {

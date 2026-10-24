@@ -53,6 +53,27 @@ if [[ -f "$streamline/sl.interposer.dll" ]]; then
 else
     echo "DLSS-G: no Streamline runtime in $streamline (FSR 3 only)" >&2
 fi
+# DLSS Super Resolution (RTX 20 and newer): the MIT bridge built from gpu/dlss_bridge and
+# NVIDIA's runtime from the DLSS SDK. Redistributable under the NVIDIA RTX SDKs license, which
+# ships beside them. Without the bridge the package works and DLSS stays off.
+dlss_bridge=${DLSS_BRIDGE:-out/dlss-bridge/Release/sotc_dlss.dll}
+dlss_sdk=${DLSS_SDK_ROOT:-../dlss-sdk}
+if [[ -n ${DLSS_SDK_ROOT:-} ]]; then
+    dlss_sdk=$(cygpath -u "$DLSS_SDK_ROOT")
+fi
+if [[ -f "$dlss_bridge" ]]; then
+    cp "$dlss_bridge" "$dest/bin/"
+    if [[ -f "$dlss_sdk/lib/Windows_x86_64/rel/nvngx_dlss.dll" ]]; then
+        cp "$dlss_sdk/lib/Windows_x86_64/rel/nvngx_dlss.dll" "$dest/bin/"
+    fi
+    mkdir -p "$dest/bin/licenses-nvidia"
+    for license in "$dlss_sdk"/LICENSE*; do
+        [[ -f "$license" ]] && cp "$license" "$dest/bin/licenses-nvidia/"
+    done
+    echo "DLSS: sotc_dlss.dll and nvngx_dlss.dll included"
+else
+    echo "DLSS: no sotc_dlss.dll in $dlss_bridge (build gpu/dlss_bridge); DLSS off" >&2
+fi
 cp scripts/prepare.py scripts/link_libc.py scripts/link_modules.py scripts/content_profile.py \
    scripts/sotc_cpu.py scripts/sotc_modes.py "$dest/scripts/"
 cp sotc.py SotC.bat LICENSE CHANGELOG.md "$dest/"

@@ -506,6 +506,7 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
         static_cast<float>(EmulatorSettings.GetRcasAttenuation() / 1000.f);
 
     fsr_pass.Create(device, instance.GetAllocator(), num_images);
+    dlss_upscaler.Create(device, instance.GetAllocator(), num_images);
     pp_pass.Create(device, swapchain.GetSurfaceFormat().format);
 
     // sotc: the pipeline cache is read here, once frames can be presented, and blank frames with
@@ -802,12 +803,36 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
             fsr_settings.rcas_attenuation = static_cast<float>(live) / 1000.f;
         }
     }
-    image_view = fsr_pass.Render(cmdbuf, image_view, image_size, {frame->width, frame->height},
-                                 fsr_settings, frame->is_hdr);
+    // sotc: DLSS Super Resolution replaces FSR 1 when the optional bridge DLLs are installed.
+    // It reuses this frame's G-buffer depth and motion vectors; without them (no G-buffer draw)
+    // the frame keeps FSR 1. HDR output is left to FSR 1: DLSS would need linear values, and the
+    // 10-bit buffer reaches here PQ encoded.
+    vk::ImageView dlss_view{};
+    if (Dlssg::Upscaling() && !frame->is_hdr) {
+        Dlssg::UpscaleInputs upscale{};
+        if (Dlssg::GetUpscaleInputs(frame->id, upscale)) {
+            dlss_view = dlss_upscaler.Render(
+                cmdbuf, image_view, view_info.format, image_size,
+                {frame->width, frame->height}, frame->id,
+                {upscale.depth, upscale.depth_view, upscale.depth_format,
+                 vk::ImageAspectFlagBits::eDepth, upscale.motion, upscale.motion_view,
+                 upscale.jitter_x, upscale.jitter_y, upscale.reset, frame->is_hdr,
+                 static_cast<float>(upscale.width), static_cast<float>(upscale.height), 0.0f},
+                1000.0f / 60.0f);
+        }
+    }
+    if (dlss_view) {
+        image_view = dlss_view;
+    } else {
+        image_view = fsr_pass.Render(cmdbuf, image_view, image_size,
+                                     {frame->width, frame->height}, fsr_settings, frame->is_hdr);
+    }
 
     // Vulkan has no sRGB variant of the 10-bit format, so an A2R10G10B10Srgb buffer reaches
-    // the post process pass still sRGB encoded and has to be decoded there instead.
+    // the post process pass still sRGB encoded and has to be decoded there instead. DLSS
+    // outputs display-referred sRGB values in RGBA16F, so the same decode applies.
     pp_settings.srgb_input =
+        dlss_view != vk::ImageView{} ||
         attribute.attrib.pixel_format == Libraries::VideoOut::PixelFormat::A2R10G10B10Srgb;
     pp_pass.Render(cmdbuf, image_view, image_size, *frame, pp_settings);
 

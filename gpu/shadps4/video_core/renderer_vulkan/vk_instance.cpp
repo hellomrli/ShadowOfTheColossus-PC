@@ -15,6 +15,7 @@
 #include "sdl_window.h"
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
 #include "video_core/renderer_vulkan/vk_dlssg.h"
+#include "video_core/renderer_vulkan/vk_dlss.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_platform.h"
 #include "video_core/sotc_stats.h"
@@ -323,7 +324,10 @@ bool Instance::CreateDevice() {
         return false;
     }
 
-    boost::container::static_vector<const char*, 32> enabled_extensions;
+    // sotc: DLSS adds a handful of NGX extensions, so this is a vector rather than a
+    // fixed 32-entry static_vector (the optional list is already long).
+    std::vector<const char*> enabled_extensions;
+    enabled_extensions.reserve(48);
     const auto add_extension = [&](std::string_view extension) -> bool {
         const auto result =
             std::find_if(available_extensions.begin(), available_extensions.end(),
@@ -338,6 +342,11 @@ bool Instance::CreateDevice() {
         LOG_WARNING(Render_Vulkan, "Extension {} unavailable.", extension);
         return false;
     };
+
+    // sotc: NVIDIA DLSS Super Resolution (optional DLLs; no-op without them or on other GPUs).
+    if (Dlss* dlss = Dlss::Get()) {
+        dlss->AppendDeviceExtensions(*instance, physical_device, enabled_extensions);
+    }
 
     // Required
     ASSERT_MSG(add_extension(VK_KHR_SWAPCHAIN_EXTENSION_NAME),
@@ -741,6 +750,9 @@ bool Instance::CreateDevice() {
     }
 
     CreateAllocator();
+    if (Dlss* dlss = Dlss::Get()) {
+        dlss->Initialize(*instance, physical_device, *device); // sotc: DLSS Super Resolution
+    }
     Dlssg::OnDeviceCreated(*this); // sotc: DLSS Frame Generation (SOTC_DLSSG=1)
     return true;
 }
