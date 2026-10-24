@@ -228,6 +228,11 @@ Instance::Instance(Frontend::WindowSDL& window, s32 physical_device_index,
 }
 
 Instance::~Instance() {
+    // sotc: NGX keeps its own Vulkan objects; shut DLSS down while the device is still alive.
+    // Without this the atexit handler ran after the device was destroyed.
+    if (Dlss* dlss = Dlss::Get()) {
+        dlss->Shutdown();
+    }
     ImGui::Core::Shutdown(GetDevice());
     vmaDestroyAllocator(allocator);
 }
