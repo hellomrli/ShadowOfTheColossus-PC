@@ -52,9 +52,11 @@ jobs:
         shell: msys2 {0}
         run: |
           set -euo pipefail
+          # setup-msys2's minimal PATH only has /clang64/bin: add the MSYS2 core utilities.
+          export PATH="/usr/bin:/clang64/bin:$PATH"
           pwd
-          command -v clang cmake ninja pkg-config
-          /usr/bin/bash build.sh
+          command -v clang cmake ninja pkg-config git mkdir
+          bash build.sh
 
       - name: NVIDIA DLSS SDK (headers, import library, runtime)
         shell: pwsh
@@ -89,7 +91,8 @@ jobs:
           DLSS_BRIDGE: out/dlss-bridge/Release/sotc_dlss.dll
         run: |
           set -euo pipefail
-          /usr/bin/bash packaging/windows/package_sotc.sh
+          export PATH="/usr/bin:/clang64/bin:$PATH"
+          bash packaging/windows/package_sotc.sh
 
       - name: Upload the package
         uses: actions/upload-artifact@v4
