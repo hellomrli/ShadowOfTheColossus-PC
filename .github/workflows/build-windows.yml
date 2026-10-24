@@ -54,7 +54,7 @@ jobs:
           set -euo pipefail
           pwd
           command -v clang cmake ninja pkg-config
-          bash build.sh
+          /usr/bin/bash build.sh
 
       - name: NVIDIA DLSS SDK (headers, import library, runtime)
         shell: pwsh
@@ -89,7 +89,7 @@ jobs:
           DLSS_BRIDGE: out/dlss-bridge/Release/sotc_dlss.dll
         run: |
           set -euo pipefail
-          bash packaging/windows/package_sotc.sh
+          /usr/bin/bash packaging/windows/package_sotc.sh
 
       - name: Upload the package
         uses: actions/upload-artifact@v4
