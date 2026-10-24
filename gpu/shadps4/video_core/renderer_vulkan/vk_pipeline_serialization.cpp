@@ -19,7 +19,7 @@
 namespace Serialization {
 /* You should increment versions below once corresponding serialization scheme is changed. */
 // Above both lines before the upstream merge: generation changed, so old caches are dropped.
-static constexpr u32 ShaderBinaryVersion = 34u;
+static constexpr u32 ShaderBinaryVersion = 35u;
 // sotc: 33 = the draw thread merge (SRT walker faults read zero instead of patching).
 static constexpr u32 ShaderMetaVersion = 21u;
 static constexpr u32 PipelineKeyVersion = 3u;
