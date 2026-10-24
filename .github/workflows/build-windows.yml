@@ -51,7 +51,8 @@ jobs:
       - name: Build the port
         shell: msys2 {0}
         run: |
-          cd "$(cygpath -u "$GITHUB_WORKSPACE")"
+          set -x
+          echo "workspace=${GITHUB_WORKSPACE:-unset} pwd=$(pwd)"
           bash build.sh
 
       - name: NVIDIA DLSS SDK (headers, import library, runtime)
@@ -87,7 +88,8 @@ jobs:
           DLSS_SDK_ROOT: ${{ github.workspace }}\dlss-sdk
           DLSS_BRIDGE: out/dlss-bridge/Release/sotc_dlss.dll
         run: |
-          cd "$(cygpath -u "$GITHUB_WORKSPACE")"
+          set -x
+          echo "workspace=${GITHUB_WORKSPACE:-unset} pwd=$(pwd)"
           bash packaging/windows/package_sotc.sh
 
       - name: Upload the package
