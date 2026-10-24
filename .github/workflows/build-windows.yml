@@ -49,11 +49,10 @@ jobs:
             mingw-w64-clang-x86_64-spirv-cross
 
       - name: Build the port
-        shell: bash
+        shell: msys2 {0}
         run: |
           set -euo pipefail
-          export MSYS2_ROOT=/c/msys64
-          export PATH="$MSYS2_ROOT/clang64/bin:$MSYS2_ROOT/usr/bin:$PATH"
+          pwd
           command -v clang cmake ninja pkg-config
           bash build.sh
 
@@ -82,17 +81,14 @@ jobs:
         run: python -m pip install --disable-pip-version-check pyinstaller pillow
 
       - name: Package SotC-PC.zip
-        shell: bash
+        shell: msys2 {0}
         env:
           # setup-python exports pythonLocation as a Windows path; package_sotc.sh runs it directly.
           WINPYTHON: ${{ env.pythonLocation }}\python.exe
-          MSYS2_ROOT: /c/msys64
           DLSS_SDK_ROOT: ${{ github.workspace }}\dlss-sdk
           DLSS_BRIDGE: out/dlss-bridge/Release/sotc_dlss.dll
         run: |
           set -euo pipefail
-          export MSYS2_ROOT=/c/msys64
-          export PATH="$MSYS2_ROOT/clang64/bin:$MSYS2_ROOT/usr/bin:$PATH"
           bash packaging/windows/package_sotc.sh
 
       - name: Upload the package
