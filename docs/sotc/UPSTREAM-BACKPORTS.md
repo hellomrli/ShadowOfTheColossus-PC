@@ -15,8 +15,9 @@ tracks what was reviewed from `b4e7ae7..12a45645` (2026-10-24, 98 commits touchi
 | `603cff43` | Stable phi deduplication order | The worklist was built from `unordered_map` iteration order, so the same shader could produce different IR between runs. |
 | `1c2b8f97` | Proper `V_RCP_CLAMP_F32`, `V_RSQ_CLAMP_F32`, `V_RSQ_LEGACY_F32`, `V_LOG_CLAMP_F32` | SotC mapped all four to the non-clamped instructions, so results could be `inf`/`NaN` where GCN clamps. (The `V_CVT_PK_U8_F32` part was already backported.) |
 | `b08fd9bb` | Detect fp64 use from the instruction types | Only `PackDouble2x32`/`UnpackDouble2x32` were checked; a shader whose first fp64 instruction was e.g. `FPAdd64` could be compiled without fp64 support. |
+| `6752d8b1` | `BUFFER_WBINVL1` / `BUFFER_WBINVL1_SC` | The format table described them as 4-operand instructions and the translator had no case, so a shader using a cache invalidation hit `UNREACHABLE`. They take no operands and lower to the device memory barrier. |
 
-`ShaderBinaryVersion` 33 → 36 (all of the above change shader output; the cache is rebuilt on
+`ShaderBinaryVersion` 33 → 37 (all of the above change shader output; the cache is rebuilt on
 first start). Also SotC-local: `Instance::~Instance` now calls `Dlss::Shutdown()` before the
 device is destroyed (the `atexit` handler used to run after it).
 
