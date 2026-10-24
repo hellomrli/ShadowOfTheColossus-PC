@@ -86,6 +86,11 @@ SOTC_GAME_DIR=..\CUSA08809
 # SOTC_SYS_MODULES=C:\path\to\sys_modules
 # Optional modes: af16 (sharp textures), fps60 (no 30 FPS cap, experimental):
 # SOTC_MODES=af16
+# DLSS (RTX 20+): on by default when sotc_dlss.dll and nvngx_dlss.dll are next to bb-probe.exe.
+# For Super Resolution instead of DLAA, render below the output size:
+# SOTC_RENDER_RES=1280x720
+# SOTC_OUTPUT_RES=1920x1080
+# SOTC_DLSS=0
 EOF
 # Sony firmware must never be in the package.
 if find "$dest" -iname '*.sprx' -o -iname '*.prx' | grep -q .; then

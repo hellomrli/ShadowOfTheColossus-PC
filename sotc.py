@@ -18,6 +18,10 @@ Settings (environment variables, or sotc.ini beside this script as NAME=value li
                       fps60 (removes the 30 FPS cap; experimental, vblank at 120 Hz),
                       fps60game (the game's own 60 FPS target, as the PS4 Pro Performance mode;
                       with SOTC_FPS_CAP=off)
+    SOTC_DLSS         optional: 0 turns DLSS off. On RTX cards with the packaged sotc_dlss.dll
+                      and nvngx_dlss.dll (next to bb-probe.exe) DLSS replaces FSR 1
+                      automatically: DLAA at the same render/output size, Super Resolution when
+                      the game renders below the output (SOTC_RENDER_RES with SOTC_OUTPUT_RES).
     SOTC_RENDER_RES   optional: the game renders at WxH instead of 1920x1080 (e.g. 2560x1080 for
                       21:9, a wider view); the output follows its aspect; PS4 mode only; at most 1080
                       lines tall and 4.2 million pixels, larger sizes are scaled down

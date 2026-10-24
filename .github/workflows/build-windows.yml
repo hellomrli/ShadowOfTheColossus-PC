@@ -49,13 +49,13 @@ jobs:
             mingw-w64-clang-x86_64-spirv-cross
 
       - name: Build the port
-        shell: msys2 {0}
+        shell: bash
         run: |
-          set -x
-          echo "workspace=${GITHUB_WORKSPACE:-unset} pwd=$(pwd)"
-          command -v bash || true
-          ls -l build.sh
-          /usr/bin/bash build.sh
+          set -euo pipefail
+          export MSYS2_ROOT=C:/msys64
+          export PATH="$MSYS2_ROOT/clang64/bin:$MSYS2_ROOT/usr/bin:$PATH"
+          command -v clang cmake ninja pkg-config
+          bash build.sh
 
       - name: NVIDIA DLSS SDK (headers, import library, runtime)
         shell: pwsh
@@ -82,7 +82,7 @@ jobs:
         run: python -m pip install --disable-pip-version-check pyinstaller pillow
 
       - name: Package SotC-PC.zip
-        shell: msys2 {0}
+        shell: bash
         env:
           # setup-python exports pythonLocation as a Windows path; package_sotc.sh runs it directly.
           WINPYTHON: ${{ env.pythonLocation }}\python.exe
@@ -90,9 +90,9 @@ jobs:
           DLSS_SDK_ROOT: ${{ github.workspace }}\dlss-sdk
           DLSS_BRIDGE: out/dlss-bridge/Release/sotc_dlss.dll
         run: |
-          set -x
-          echo "workspace=${GITHUB_WORKSPACE:-unset} pwd=$(pwd)"
-          /usr/bin/bash packaging/windows/package_sotc.sh
+          set -euo pipefail
+          export PATH="C:/msys64/clang64/bin:C:/msys64/usr/bin:$PATH"
+          bash packaging/windows/package_sotc.sh
 
       - name: Upload the package
         uses: actions/upload-artifact@v4

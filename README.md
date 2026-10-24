@@ -1,4 +1,4 @@
-# Shadow of the Colossus — PC native port · v0.60.6
+# Shadow of the Colossus — PC native port · v0.61
 
 [Releases](../../releases) · [Changelog](CHANGELOG.md)
 
@@ -20,6 +20,7 @@ game needs, in the style of [bloodborne_pc](https://github.com/Supermedo/bloodbo
 
 | Version | Improvements and fixes |
 |---|---|
+| **0.61** | **DLSS Super Resolution (RTX 20 and newer)**: the package now ships this project's MIT `sotc_dlss.dll` bridge and NVIDIA's `nvngx_dlss.dll`; with an RTX card DLSS replaces FSR 1 automatically — **DLAA** at native size, **Super Resolution** when the game renders below the output size. Windows builds are produced by GitHub Actions. |
 | **0.60.6** | **No more rainbow garbage on textures and far fewer "closed out of nowhere" crashes** (the cause: speculative GPU readbacks written over memory the game had reused, after loading a save or a new area), **no more black dots on sandy ground**, **in-game menu cleaned up** (FPS, upscaler and sharpening now change at once; Bloodborne leftovers removed), **hard disk read-ahead** (fewer stalls in new areas on HDDs), textures refreshed on every load, a readable session event log (`user/events.log`). |
 | **0.60.5** | **Texture quality selector: Off / High / Maximum** (#235: sharp again), **memory leak fixed** (~60 MB/min, long-session stutter), **+3% average and +12% minimum FPS** (descriptor binds reused), **loading after a GPU driver update: 106 s → 7 s**, possible fix for **white characters on AMD GCN** (RX 470–590, Vega), **4-thread CPUs** no longer stuck loading, a hang watchdog, short hitches no longer flash a black loading screen, code review fixes. |
 | **0.60.4** | **No more cyan blocks on stone or blinking flowers** with high quality textures (the 0.60.3 crash protection switched the texture detail every second or two; now with hysteresis). |
@@ -46,7 +47,7 @@ the menu is open; **Esc** or F1 closes it.
 
 ![In-game menu (F1)](docs/images/sotc-menu-f1-en.png)
 
-- **Quick settings (apply at once):** FPS (30 / 60 / unlimited), upscaler (FSR 1 / bilinear),
+- **Quick settings (apply at once):** FPS (30 / 60 / unlimited), upscaler (DLSS when available, FSR 1 / bilinear),
   sharpening (RCAS), frame generation, **texture quality**, far shadow reuse, volume. They are
   also saved as the launcher's choice for the next start.
 - **Display:** fullscreen, FPS counter.
@@ -62,6 +63,33 @@ the menu is open; **Esc** or F1 closes it.
 | **F8** | Frame generation: off → DLSS-G → FSR 3 (when the GPU supports it) |
 | **F10** | Performance overlay (FPS and frame time) |
 | **F11** | Window / fullscreen |
+
+### DLSS Super Resolution (RTX 20 and newer)
+
+The Windows package ships `sotc_dlss.dll` (this project's MIT bridge, source in
+`gpu/dlss_bridge`) and NVIDIA's `nvngx_dlss.dll`. With an NVIDIA RTX card and both DLLs next to
+`bb-probe.exe`, DLSS replaces FSR 1 automatically:
+
+| Situation | What runs |
+|---|---|
+| render size = output size (1080p → 1080p) | **DLAA**, the same-size anti-aliasing mode |
+| render size below the output size (`SOTC_RENDER_RES=1280x720` with a 1080p output) | **DLSS Super Resolution**; the quality mode follows the ratio |
+
+`SOTC_DLSS=0` turns it off (FSR 1 is used instead). HDR output keeps FSR 1 for now. Frames
+without a G-buffer draw (movies, menus, loading screens) keep FSR 1 for that frame, and a camera
+cut resets the DLSS history automatically. The HUD is part of the upscaled image, exactly as
+with FSR 1. The first frame prints `SOTC DLSS: ready`; without the DLLs or on another GPU
+everything works as before with FSR 1.
+
+To render below the output size, put both lines in `sotc.ini` (or the environment):
+
+```ini
+SOTC_RENDER_RES=1280x720
+SOTC_OUTPUT_RES=1920x1080
+```
+
+The first is the game's render size (fewer pixels to shade, which is where the speed comes
+from), the second the size actually presented; DLSS upscales between them.
 
 ### Texture quality
 

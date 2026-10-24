@@ -45,6 +45,11 @@ Tudo isto está no lançador, na página **Imagem e FPS** (e os principais em **
 - **Saída** 720p, 1080p, 1440p ou 4K. O jogo renderiza em 1080p, como no PS4, e a imagem é
   ampliada para a saída com **FSR 1** + nitidez (RCAS) ou bilinear. A janela nunca passa de 90%
   da tela; a tela cheia usa o monitor inteiro.
+- **DLSS (RTX 20+):** o pacote inclui `sotc_dlss.dll` (ponte MIT do projeto) e o
+  `nvngx_dlss.dll` da NVIDIA. Numa placa RTX o DLSS substitui o FSR 1 sozinho: **DLAA** quando o
+  jogo desenha na mesma resolução da saída, **Super Resolution** quando desenha abaixo dela (por
+  exemplo `SOTC_RENDER_RES=1280x720` com `SOTC_OUTPUT_RES=1920x1080`). `SOTC_DLSS=0` desliga.
+  Saída HDR e quadros sem G-buffer continuam no FSR 1. O HUD faz parte da imagem ampliada.
 - **60 FPS** (experimental): tira o limite de 30 FPS do jogo (patch GoldHEN de illusion), com
   vblank a 120 Hz. Mediu 38 FPS no campo aberto e ~25 no templo.
 - **Reutilização de binds** (desligada por padrão desde a 0.60.6; `SOTC_FAST_BIND=1` liga): pula

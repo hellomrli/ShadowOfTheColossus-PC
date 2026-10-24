@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.61 — 2026-10-25
+- **DLSS Super Resolution (RTX 20 e mais novas).** O pacote passa a incluir a ponte MIT do
+  projeto (`sotc_dlss.dll`, fonte em `gpu/dlss_bridge`) e o `nvngx_dlss.dll` da NVIDIA. Numa
+  placa RTX o DLSS substitui o FSR 1 sozinho: **DLAA** quando o jogo desenha na mesma resolução
+  da saída, **Super Resolution** quando desenha abaixo dela (por exemplo `SOTC_RENDER_RES=1280x720`
+  com saída 1080p; o modo de qualidade sai da proporção). `SOTC_DLSS=0` desliga. Saída HDR
+  continua no FSR 1, e quadros sem desenho de G-buffer (filmes, menus, carregamento) também.
+  O HUD faz parte da imagem ampliada, como no FSR 1.
+- **Build do Windows no GitHub Actions** (`.github/workflows/build-windows.yml`): MSYS2 CLANG64
+  para o port, MSVC para a ponte do DLSS, PyInstaller para o lançador; o zip sai como artefato.
+
 ## 0.60.6 — 2026-10-22
 - **Fim do ruído arco-íris nas texturas e das quedas "do nada" (`0x49500`).** A causa eram as
   leituras "quentes" da GPU (`SOTC_RB_HOT`): junto com cada leitura, o port escrevia na memória do
