@@ -41,7 +41,9 @@ static bool IsCompositeExtract(IR::Opcode opcode) {
 }
 
 static bool IsDisallowedOp(IR::Opcode op) {
-    return op == IR::Opcode::InverseBallot;
+    // User data is a runtime value (the flattened user-data buffer); folding a phi of it into a
+    // constant breaks shaders that read different user data on different paths (upstream #5427).
+    return op == IR::Opcode::InverseBallot || op == IR::Opcode::GetUserData;
 }
 
 using InstList = boost::container::small_vector<IR::Inst*, 4>;
