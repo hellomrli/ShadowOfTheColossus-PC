@@ -52,7 +52,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          export MSYS2_ROOT=C:/msys64
+          export MSYS2_ROOT=/c/msys64
           export PATH="$MSYS2_ROOT/clang64/bin:$MSYS2_ROOT/usr/bin:$PATH"
           command -v clang cmake ninja pkg-config
           bash build.sh
@@ -86,12 +86,13 @@ jobs:
         env:
           # setup-python exports pythonLocation as a Windows path; package_sotc.sh runs it directly.
           WINPYTHON: ${{ env.pythonLocation }}\python.exe
-          MSYS2_ROOT: C:/msys64
+          MSYS2_ROOT: /c/msys64
           DLSS_SDK_ROOT: ${{ github.workspace }}\dlss-sdk
           DLSS_BRIDGE: out/dlss-bridge/Release/sotc_dlss.dll
         run: |
           set -euo pipefail
-          export PATH="C:/msys64/clang64/bin:C:/msys64/usr/bin:$PATH"
+          export MSYS2_ROOT=/c/msys64
+          export PATH="$MSYS2_ROOT/clang64/bin:$MSYS2_ROOT/usr/bin:$PATH"
           bash packaging/windows/package_sotc.sh
 
       - name: Upload the package
