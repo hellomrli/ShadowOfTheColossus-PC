@@ -13,9 +13,12 @@ tracks what was reviewed from `b4e7ae7..12a45645` (2026-10-24, 98 commits touchi
 | `f0ea8eb7` | `S_GETREG_B32` / `HW_ID.SE_ID` as virtual shader engine 0 | The opcode was known but had no translator: any shader reading the shader-engine id hit `UNREACHABLE`. SotC's SRT walkers and culling shaders are exactly the kind of code that reads it. |
 | `c34ca21f` | Preserve EXEC scope after an empty branch | One line in `SplitDivergenceScopes`: an empty scope must still open EXEC masking for the next instruction when it is an open-scope one. |
 | `603cff43` | Stable phi deduplication order | The worklist was built from `unordered_map` iteration order, so the same shader could produce different IR between runs. |
+| `1c2b8f97` | Proper `V_RCP_CLAMP_F32`, `V_RSQ_CLAMP_F32`, `V_RSQ_LEGACY_F32`, `V_LOG_CLAMP_F32` | SotC mapped all four to the non-clamped instructions, so results could be `inf`/`NaN` where GCN clamps. (The `V_CVT_PK_U8_F32` part was already backported.) |
+| `b08fd9bb` | Detect fp64 use from the instruction types | Only `PackDouble2x32`/`UnpackDouble2x32` were checked; a shader whose first fp64 instruction was e.g. `FPAdd64` could be compiled without fp64 support. |
 
-`ShaderBinaryVersion` 33 → 35 (all of the above change shader output; the cache is rebuilt on
-first start).
+`ShaderBinaryVersion` 33 → 36 (all of the above change shader output; the cache is rebuilt on
+first start). Also SotC-local: `Instance::~Instance` now calls `Dlss::Shutdown()` before the
+device is destroyed (the `atexit` handler used to run after it).
 
 ## Already present in SotC (no action)
 
