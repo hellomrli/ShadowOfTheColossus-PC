@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.62 — 2026-10-25
+- **DLSS no menu do jogo (F1 > Ajuste rápido > Upscaler):** DLSS / FSR 1 / Bilinear, aplicado no
+  quadro seguinte; a opção DLSS só aparece quando a ponte e o `nvngx_dlss.dll` estão presentes e a
+  placa é RTX. A **Nitidez (RCAS)** também controla o sharpness do DLSS.
+- **Dez correções do shadPS4** (`b4e7ae7..12a45645`): phi com `GetUserData` (#5427), arestas de
+  fallthrough do CFG (#5365), `S_GETREG_B32`/`HW_ID.SE_ID` (#5459), escopo EXEC após ramo vazio
+  (#5220), ordem da deduplicação de phi (#5364), `V_RCP/RSQ/LOG_CLAMP` (#5346), detecção de fp64
+  (#5342), `BUFFER_WBINVL1` (#5447), `CoarseDerivative` (#5468), coordenadas de atômica em imagem
+  1D (#5203). O cache de shaders é refeito na primeira abertura (`ShaderBinaryVersion` 33 → 38).
+- **Fechamento do NGX:** o `Instance` desliga o DLSS antes de destruir o device (o `atexit` rodava
+  depois e podia fechar o jogo na saída).
+- Documentação: `docs/sotc/DLSS.md` (arquitetura, fallbacks, verificação) e
+  `docs/sotc/UPSTREAM-BACKPORTS.md` (o que foi absorvido e o que já existia).
+
 ## 0.61 — 2026-10-25
 - **DLSS Super Resolution (RTX 20 e mais novas).** O pacote passa a incluir a ponte MIT do
   projeto (`sotc_dlss.dll`, fonte em `gpu/dlss_bridge`) e o `nvngx_dlss.dll` da NVIDIA. Numa
