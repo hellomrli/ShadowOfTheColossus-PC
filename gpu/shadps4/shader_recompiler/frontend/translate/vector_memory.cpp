@@ -7,6 +7,11 @@ namespace Shader::Gcn {
 
 void Translator::EmitVectorMemory(const GcnInst& inst) {
     switch (inst.opcode) {
+    // Cache invalidation takes no operands: the format table says so, and the barrier is enough.
+    case Opcode::BUFFER_WBINVL1_SC:
+    case Opcode::BUFFER_WBINVL1:
+        ir.DeviceMemoryBarrier();
+        return;
         // MUBUF / MTBUF
 
         // Buffer load operations
