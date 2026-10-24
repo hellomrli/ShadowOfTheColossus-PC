@@ -55,8 +55,12 @@ jobs:
           # setup-msys2's minimal PATH only has /clang64/bin: add the MSYS2 core utilities.
           export PATH="/usr/bin:/clang64/bin:$PATH"
           pwd
-          command -v clang cmake ninja pkg-config git mkdir
-          bash build.sh
+          command -v clang cmake ninja pkg-config git mkdir bash
+          echo "PATH=$PATH"
+          bash -c 'echo inner-bash-ok'
+          ls -l build.sh
+          od -c build.sh | head -2
+          bash -x build.sh
 
       - name: NVIDIA DLSS SDK (headers, import library, runtime)
         shell: pwsh
