@@ -235,15 +235,24 @@ class ApplyTests(unittest.TestCase):
             self.assertFalse(sotc_update.apply_update(self.new, self.port))
         restart.assert_not_called()
         backup = self.port / 'update' / 'backup'
-        self.assertEqual((backup / 'SotC.exe').read_bytes(), b'old exe')
+        # bin/a.dll precedes the failing bin/b.dll on both Windows and POSIX; SotC.exe may not.
+        saved = backup / 'bin' / 'a.dll'
+        self.assertEqual(saved.read_bytes(), b'old dll')
         self.assertIn('backup', sotc_update.cleanup(self.port))
         self.assertIn('backup', sotc_update.cleanup(self.port))
-        self.assertEqual((backup / 'SotC.exe').read_bytes(), b'old exe')
+        self.assertEqual(saved.read_bytes(), b'old dll')
         self.assertFalse(sotc_update.apply_update(self.new, self.port, restart=False))
-        self.assertEqual((backup / 'SotC.exe').read_bytes(), b'old exe')
+        self.assertEqual(saved.read_bytes(), b'old dll')
 
     def test_interrupted_update_keeps_backups(self):
-        with patch.object(sotc_update, '_copy', side_effect=KeyboardInterrupt):
+        copy = sotc_update._copy
+
+        def interrupt_exe(src, dst):
+            if src == self.new / 'SotC.exe':
+                raise KeyboardInterrupt
+            copy(src, dst)
+
+        with patch.object(sotc_update, '_copy', side_effect=interrupt_exe):
             with self.assertRaises(KeyboardInterrupt):
                 sotc_update.apply_update(self.new, self.port, restart=False)
         self.assertIn('backup', sotc_update.cleanup(self.port))
