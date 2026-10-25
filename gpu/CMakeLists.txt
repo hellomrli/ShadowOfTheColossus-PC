@@ -300,6 +300,17 @@ if (WIN32)
 endif()
 
 # Explicit test targets; neither launches the game nor needs a Vulkan device.
+add_executable(recorded-external-test EXCLUDE_FROM_ALL ../tests/test_recorded_external.cpp
+    shadps4/video_core/renderer_vulkan/vk_recorder.cpp shim/common/logging/log.cpp)
+target_compile_options(recorded-external-test PRIVATE -UNDEBUG -Wall -Wextra -Werror
+    -Wno-missing-field-initializers)
+target_include_directories(recorded-external-test PRIVATE shim shadps4)
+target_link_libraries(recorded-external-test PRIVATE Vulkan::Headers fmt::fmt)
+if (WIN32)
+    target_compile_definitions(recorded-external-test PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+    target_link_libraries(recorded-external-test PRIVATE synchronization)
+endif()
+
 add_executable(motion-history-test EXCLUDE_FROM_ALL ../tests/test_motion_history.cpp)
 target_compile_options(motion-history-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 target_include_directories(motion-history-test PRIVATE ..)

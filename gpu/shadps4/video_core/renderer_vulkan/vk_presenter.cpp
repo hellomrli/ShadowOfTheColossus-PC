@@ -810,7 +810,7 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
         Dlssg::UpscaleInputs upscale{};
         if (Dlssg::GetUpscaleInputs(frame->id, upscale)) {
             dlss_view = dlss_upscaler.Render(
-                cmdbuf, image_view, view_info.format, image_size,
+                draw_scheduler, image_view, view_info.format, image_size,
                 {frame->width, frame->height}, frame->id,
                 {upscale.depth, upscale.depth_view, upscale.depth_format,
                  vk::ImageAspectFlagBits::eDepth, upscale.motion, upscale.motion_view,

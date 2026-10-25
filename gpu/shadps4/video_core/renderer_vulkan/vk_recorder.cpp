@@ -654,6 +654,23 @@ bool CommandRecorder::IsFake(VkCommandBuffer cmdbuf) noexcept {
     return offset < NumFakeHandles;
 }
 
+bool CommandRecorder::RecordSynchronous(
+    vk::CommandBuffer cmdbuf, Common::UniqueFunction<bool, vk::CommandBuffer>&& func) {
+    if (!IsFake(cmdbuf)) {
+        return func(vk::CommandBuffer{cmdbuf});
+    }
+    ASSERT(g_recorder && !g_recorder->IsRecordingThread());
+    bool result = false;
+    g_recorder->CountCommand();
+    g_recorder->Run([cmdbuf, func = std::move(func), &result] {
+        result = func(vk::CommandBuffer{g_recorder->Real(cmdbuf)});
+    });
+    // sotc: translation alone is insufficient: earlier commands must be recorded first,
+    // and the external SDK must not record concurrently with the consumer on this buffer.
+    g_recorder->Sync();
+    return result;
+}
+
 CommandRecorder::CommandRecorder() {
     ASSERT_MSG(g_recorder == nullptr, "cp_record_thread: only one recorded scheduler is supported");
     InstallThunks();

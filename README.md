@@ -1,12 +1,17 @@
-# Shadow of the Colossus — PC native port · v0.64 (preview)
+# Shadow of the Colossus — PC native port · v0.65 (preview)
 
 [Releases](../../releases) · [Changelog](CHANGELOG.md)
 
-**v0.64 is a prerelease of this fork.** It adds executable patch guards, safer cache reads/writes
-and driver-crash diagnostics to v0.63; the reported RTX 3070 startup crash is still under
-investigation, not confirmed fixed. Windows/RTX gameplay and image quality still need testing. Download previews
+**v0.65 is a prerelease of this fork.** It fixes an invalid command-buffer handoff to DLSS:
+NGX creation/evaluation now run in order on the recording thread with real Vulkan handles.
+The new RTX 3070 stack reaches NGX feature creation; whether this fixes that startup crash
+still needs testing on the affected PC. Windows/RTX gameplay and image quality remain unverified here. Download previews
 manually from Releases: the launcher's updater follows this fork's stable releases, not previews
 or upstream releases. Keep a backup of `user/` and `sotc.ini` when moving to a new directory.
+
+**A v0.65 e uma pre-release deste fork.** Corrige a entrega de um handle interno ao NGX,
+com criacao/avaliacao DLSS na thread do comando real. O jogador confirmou que FSR 1 evita
+a queda relatada; o teste da correcao com DLSS na RTX 3070 ainda esta pendente.
 
 > **No game or Sony files are included.** You need your own game dump and, for sound, two
 > modules from your own console. This project is not affiliated with Sony Interactive
@@ -26,6 +31,7 @@ game needs, in the style of [bloodborne_pc](https://github.com/Supermedo/bloodbo
 
 | Version | Improvements and fixes |
 |---|---|
+| **0.65 (preview)** | **Real Vulkan command buffers for DLSS**, with ordered creation/evaluation on the recording thread and synchronous fallback results; NGX crash-context labels, balanced debug labels on failure and a no-GPU regression using the production recorder. RTX 3070 validation remains pending; no renderer-default or shader-cache changes. |
 | **0.64 (preview)** | **Verify the actual executable before fixed-address CPU patches**, including update selection in the launcher; reject malformed/truncated cache blobs and publish only complete writes; **native Windows crash stacks and active Vulkan operation/shader context**. RTX 3070 driver-crash investigation remains open; no shader-output or renderer-default changes. |
 | **0.63 (preview)** | **Safer self-updates** with protected saves/settings and retained recovery backups; persistent **DLSS / FSR 1 / Bilinear** selection in both menus, corrected DLSS sharpening and history reset; reliable preparation cache/update overlays; **complete DLL dependencies for PCs without MSYS2**, clean-checkout packaging and Linux/Windows regression checks. |
 | **0.62 (preview)** | **DLSS in the F1 menu**, ten upstream shader/recompiler fixes, and NGX shutdown before Vulkan device destruction. Shader cache version 38: upgrading from 0.61 rebuilds the cache on first start. |
@@ -120,10 +126,13 @@ In the launcher (**Quick settings → Textures**) and in the in-game menu (chang
 ### Known issues
 
 - **RTX 3070 startup crash in `nvoglv64.dll+0xe35140`:** reported both with FSR 3 and with frame
-  generation off. Both sessions still initialized DLSS. Keep frame generation off, then test
-  `SOTC_DLSS=0` in **Advanced → Extra variables** and restart; selecting FSR 1 alone does not
-  disable NGX. Test `SOTC_RECORD_THREAD=0` separately, changing one variable at a time. Send the
-  new log and matching dump if it persists. [Investigation and patch safety](docs/sotc/CRASH-NVIDIA-2026-10-25.md).
+  generation off. The 0.64 native stack identifies NGX feature creation. 0.65 fixes an internal
+  placeholder command buffer escaping into NGX. **FSR 1 is a confirmed workaround on the
+  reporting PC** (about ten minutes, exit code 0); this predates the fix and does not validate
+  DLSS. To test 0.65, select DLSS with frame generation off, keeping other settings unchanged.
+  If it persists, compare `SOTC_RECORD_THREAD=0` separately and send the new log and matching
+  dump. `SOTC_DLSS=0` in **Advanced → Extra variables** disables even NGX initialization;
+  FSR 1 selection skips SR but still allows initialization. [Investigation and patch safety](docs/sotc/CRASH-NVIDIA-2026-10-25.md).
 - The first start after updating rebuilds the shaders: the first load is slow and stutters.
 - **Texture quality "Maximum"** can close the game in very wide views (sword raised against the
   sun, the last colossus' area; #186). Since 0.60.6 it is not available in PS4 Pro mode, where it
@@ -209,7 +218,9 @@ The standalone C++ tests need no GPU or game dump. Python tests that need a nati
 reported as skipped until that binary is built. CI runs the Python suite on Linux, the launcher,
 updater and preparation tests on Windows, and live-settings, cache-blob and diagnostic-context
 tests on both build paths. The Windows build also tests native unwinding with frame pointers
-omitted. The patch-guard tests use small synthetic executables, not game or firmware files.
+omitted. The production command recorder runs against a mock driver on Linux and Windows to
+check the external-SDK handoff without a GPU or NGX. The patch-guard tests use small synthetic
+executables, not game or firmware files.
 Current native-test gaps and Windows verification steps are recorded in the
 [review notes](docs/sotc/REVIEW-2026-10-25.md).
 

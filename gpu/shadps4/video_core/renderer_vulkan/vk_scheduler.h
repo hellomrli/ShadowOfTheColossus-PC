@@ -442,6 +442,10 @@ public:
     /// up the command processor), otherwise right away.
     void RecordDeferred(Common::UniqueFunction<void, vk::CommandBuffer>&& func);
 
+    /// sotc: record an external SDK call in stream order using a real command buffer.
+    /// Wait for its result so the caller can select a fallback and release captured data.
+    [[nodiscard]] bool RecordSynchronous(Common::UniqueFunction<bool, vk::CommandBuffer>&& func);
+
     /// sotc: true when Vulkan commands are recorded on a thread of their own.
     [[nodiscard]] bool HasRecordThread() const noexcept {
         return recorder != nullptr;

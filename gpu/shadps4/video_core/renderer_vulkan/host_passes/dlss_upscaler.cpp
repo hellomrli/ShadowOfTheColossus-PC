@@ -10,12 +10,14 @@
 #include <vector>
 
 #include "common/assert.h"
+#include "common/scope_exit.h"
 #include "core/emulator_settings.h"
 #include "video_core/host_shaders/dlss_color_comp.h"
 #include "video_core/host_shaders/dlss_color_encode_comp.h"
 #include "video_core/host_shaders/fg_depth_comp.h"
 #include "video_core/renderer_vulkan/vk_dlss.h"
 #include "video_core/renderer_vulkan/vk_platform.h"
+#include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_shader_util.h"
 
 namespace Vulkan::HostPasses {
@@ -132,7 +134,7 @@ void DlssUpscaler::Destroy() {
     images.clear();
 }
 
-vk::ImageView DlssUpscaler::Render(vk::CommandBuffer cmdbuf, vk::ImageView color,
+vk::ImageView DlssUpscaler::Render(Scheduler& scheduler, vk::ImageView color,
                                    vk::Format color_format, vk::Extent2D input_size,
                                    vk::Extent2D output_size, u32 frame_id, const Inputs& inputs,
                                    float frame_ms) {
@@ -159,6 +161,21 @@ vk::ImageView DlssUpscaler::Render(vk::CommandBuffer cmdbuf, vk::ImageView color
         ResizeAndInvalidate(input_size, output_size);
         reset = true;
     }
+
+    const Dlss::FeatureDesc desc{
+        input_size.width, input_size.height, output_size.width, output_size.height,
+        Dlss::QualityForScale(static_cast<float>(output_size.width) /
+                              static_cast<float>(input_size.width)),
+        inputs.hdr,
+        false,
+    };
+    if (feature && !(*feature == desc)) {
+        std::fprintf(stderr, "SOTC DLSS: feature parameters changed; keeping FSR 1\n");
+        feature_failed = true;
+        return {};
+    }
+    const bool create_feature = !feature;
+    const auto cmdbuf = scheduler.CommandBuffer();
 
     Img& img = images[frame_id % num_images];
     if (img.dirty) {
@@ -194,11 +211,17 @@ vk::ImageView DlssUpscaler::Render(vk::CommandBuffer cmdbuf, vk::ImageView color
         });
     };
 
-    if (EmulatorSettings.IsVkHostMarkersEnabled()) {
+    const bool markers = EmulatorSettings.IsVkHostMarkersEnabled();
+    if (markers) {
         cmdbuf.beginDebugUtilsLabelEXT(vk::DebugUtilsLabelEXT{
             .pLabelName = "Host/DLSS",
         });
     }
+    SCOPE_EXIT {
+        if (markers) {
+            cmdbuf.endDebugUtilsLabelEXT();
+        }
+    };
 
     const u32 groups_x = (input_size.width + 7) / 8;
     const u32 groups_y = (input_size.height + 7) / 8;
@@ -307,27 +330,6 @@ vk::ImageView DlssUpscaler::Render(vk::CommandBuffer cmdbuf, vk::ImageView color
             vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageWrite,
             vk::ImageAspectFlagBits::eColor);
 
-    const Dlss::FeatureDesc desc{
-        input_size.width,  input_size.height, output_size.width,  output_size.height,
-        Dlss::QualityForScale(static_cast<float>(output_size.width) /
-                              static_cast<float>(input_size.width)),
-        inputs.hdr,
-        false,
-    };
-    if (!feature) {
-        if (!dlss->CreateFeature(cmdbuf, desc)) {
-            std::fprintf(stderr, "SOTC DLSS: feature creation failed; keeping FSR 1\n");
-            feature_failed = true;
-            return {};
-        }
-        feature = desc;
-        reset = true;
-    } else if (!(*feature == desc)) {
-        std::fprintf(stderr, "SOTC DLSS: feature parameters changed; keeping FSR 1\n");
-        feature_failed = true;
-        return {};
-    }
-
     const Dlss::Frame frame{
         .color{img.color, img.color_view.get(), vk::Format::eR16G16B16A16Sfloat,
                vk::ImageAspectFlagBits::eColor, input_size.width, input_size.height},
@@ -339,17 +341,30 @@ vk::ImageView DlssUpscaler::Render(vk::CommandBuffer cmdbuf, vk::ImageView color
                 vk::ImageAspectFlagBits::eColor, output_size.width, output_size.height},
         .jitter_x = inputs.jitter_x,
         .jitter_y = inputs.jitter_y,
-        .reset = inputs.reset || reset,
+        .reset = inputs.reset || reset || create_feature,
         .frame_ms = frame_ms,
         .sharpness = inputs.sharpness,
         .mv_scale_x = inputs.mv_scale_x,
         .mv_scale_y = inputs.mv_scale_y,
     };
-    if (!dlss->Evaluate(cmdbuf, frame)) {
-        std::fprintf(stderr, "SOTC DLSS: evaluation failed; keeping FSR 1\n");
+    // sotc: NGX loads raw Vulkan entrypoints, bypassing our fake-handle dispatcher.
+    // Both calls must run on the command buffer's recording thread after the conversions.
+    const bool evaluated = scheduler.RecordSynchronous([&](vk::CommandBuffer real) {
+        if (create_feature && !dlss->CreateFeature(real, desc)) {
+            std::fprintf(stderr, "SOTC DLSS: feature creation failed; keeping FSR 1\n");
+            return false;
+        }
+        if (!dlss->Evaluate(real, frame)) {
+            std::fprintf(stderr, "SOTC DLSS: evaluation failed; keeping FSR 1\n");
+            return false;
+        }
+        return true;
+    });
+    if (!evaluated) {
         feature_failed = true;
         return {};
     }
+    feature = desc;
     reset = false;
 
     barrier(img.output, vk::ImageLayout::eGeneral, vk::ImageLayout::eShaderReadOnlyOptimal,
@@ -357,9 +372,6 @@ vk::ImageView DlssUpscaler::Render(vk::CommandBuffer cmdbuf, vk::ImageView color
             vk::PipelineStageFlagBits2::eAllCommands, vk::AccessFlagBits2::eShaderRead,
             vk::ImageAspectFlagBits::eColor);
 
-    if (EmulatorSettings.IsVkHostMarkersEnabled()) {
-        cmdbuf.endDebugUtilsLabelEXT();
-    }
     return img.output_view.get();
 }
 

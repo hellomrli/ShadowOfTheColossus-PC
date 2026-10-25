@@ -1,93 +1,112 @@
-# DLSS Super Resolution in SotC-PC
+# DLSS Super Resolution no SotC-PC
 
-Optional NVIDIA DLSS (DLAA and Super Resolution) that replaces the FSR 1 pass when the bridge
-DLLs are next to `bb-probe.exe`. No NVIDIA code is linked into the port: NGX is loaded at run
-time and every failure falls back to FSR 1.
+NVIDIA DLSS opcional (DLAA e Super Resolution), que substitui o passe FSR 1 quando as DLLs
+da ponte estao ao lado de `bb-probe.exe`. O port carrega NGX em tempo de execucao, atraves
+de uma ponte separada. Falhas retornadas pelas APIs mantem FSR 1; isso nao recupera uma
+violacao de acesso dentro de NGX ou do driver.
 
-## Pieces
+## Componentes
 
-| Where | What |
+| Local | Funcao |
 |---|---|
-| `gpu/dlss_bridge/` | `sotc_dlss.dll`, MIT, MSVC-only, built separately (the only part that includes `nvsdk_ngx_*.h`). ABI 1 is Super Resolution only; SotC uses Streamline for DLSS-G. |
-| `vk_dlss.cpp/.h` | Loads the bridge + `nvngx_dlss.dll` from the executable's folder, negotiates NGX's Vulkan instance/device extensions, creates the feature and evaluates it. `SOTC_DLSS=0` returns null and nothing else changes. |
-| `host_passes/dlss_upscaler.cpp` | Converts the presented image to RGBA16F and the depth to R32F, records the evaluation, returns an RGBA16F view the existing post-process pass draws to the swapchain. |
-| `vk_dlssg.cpp` | Already captured the G-buffer depth, motion vectors, camera jitter and reset for DLSS-G; `Upscaling()`/`GetUpscaleInputs()` expose the same data to DLSS SR, and `Capturing()` keeps capturing when only SR is on. |
-| `vk_presenter.cpp` | Before the FSR 1 call: if DLSS ran, its view replaces the FSR view; otherwise FSR 1 runs exactly as before. |
+| `gpu/dlss_bridge/` | `sotc_dlss.dll`, MIT, somente MSVC, compilada separadamente; unica parte que inclui `nvsdk_ngx_*.h`. A ABI 1 e somente SR; o caminho DLSS-G usa Streamline, nao incluido no ZIP atual. |
+| `vk_dlss.cpp/.h` | Carrega ponte e `nvngx_dlss.dll`, negocia extensoes Vulkan, cria e avalia a feature. `SOTC_DLSS=0` impede essa inicializacao. Recusa handles de comando nulos/internos. |
+| `host_passes/dlss_upscaler.cpp` | Converte cor para RGBA16F e profundidade para R32F; usa o scheduler para gravar criacao/avaliacao NGX; devolve uma view RGBA16F para o pos-processamento. |
+| `vk_recorder.cpp` / `vk_scheduler.cpp` | Executa o callback NGX em ordem na thread proprietaria do comando real; espera pelo resultado antes de liberar os parametros ou escolher fallback. |
+| `vk_dlssg.cpp` | Compartilha profundidade, motion vectors, jitter e reset do G-buffer com DLSS SR por `Upscaling()`/`GetUpscaleInputs()`; `Capturing()` captura tambem quando apenas SR esta ativo. |
+| `vk_presenter.cpp` | Usa a view DLSS quando disponivel; caso contrario, mantem o caminho FSR 1. |
 
-## Data flow (presentation stage)
+## Fluxo na apresentacao
 
-```
+```text
 game image (render size, R8G8B8A8Srgb / B8G8R8A8Srgb / A2R10G10B10)
-        │  dlss_color.comp: sample through a UNORM or sRGB view, store RGBA16F
-        ▼
-   colour RGBA16F ─┐
-   depth  R32F    ─┼─► DLSS feature (NGX) ─► RGBA16F output (presentation size)
-   motion R16G16  ─┤                              │
-   jitter/reset   ─┘                              ▼
-                                            pp_pass → swapchain
+        |  dlss_color.comp: UNORM/sRGB -> RGBA16F
+        v
+   colour RGBA16F -+
+   depth  R32F    -+--> DLSS (NGX) --> RGBA16F (presentation size)
+   motion R16G16  -+                         |
+   jitter/reset   -+                         v
+                                      pp_pass -> swapchain
 ```
 
-- **Colour space:** DLSS's SDR mode expects display-referred (sRGB) values. An sRGB-format game
-  image is decoded by the sampler and re-encoded by the shader; an A2R10G10B10 image is sampled
-  through a UNORM view and copied unchanged. The post-process pass then treats the DLSS output
-  as sRGB-encoded (`srgb_input = 1`), which is the same round trip the 10-bit FSR path already
-  used.
-- **Depth:** the game's buffer is reversed-Z. The shader stores `1 - d` (0 at the near plane) in
-  R32F, so the feature is created with `depth_inverted = false`.
-- **Motion vectors:** the G-buffer stores `curUV - prevUV`, so `mv_scale_x/y` are the render
-  width/height. The feature is created with `MVLowRes`.
-- **Jitter:** the game's own TAA jitter in pixels, the same value DLSS-G gets.
-- **Reset:** camera cuts from the game constants, the first frame after the feature is created,
-  and the first frame after DLSS was skipped (missing inputs, HDR or a different upscaler).
+- **Cor:** DLSS SDR espera valores display-referred (sRGB). O sampler decodifica a imagem
+  sRGB e o shader a recodifica; A2R10G10B10 e lido por uma view UNORM sem essa conversao.
+  O pos-processamento trata a saida como sRGB (`srgb_input = 1`), como no caminho FSR de 10 bits.
+- **Profundidade:** o jogo usa reversed-Z. O shader grava `1 - d` em R32F, com zero no plano
+  proximo, por isso `depth_inverted = false`.
+- **Motion vectors:** o G-buffer guarda `curUV - prevUV`; `mv_scale_x/y` sao largura/altura
+  da renderizacao, e a feature usa `MVLowRes`.
+- **Jitter:** o jitter TAA do jogo em pixels, compartilhado com DLSS-G.
+- **Reset:** cortes de camera, primeira criacao e primeiro quadro apos pular DLSS por falta
+  de dados, HDR ou selecao de outro upscaler.
 
-## Settings
+### Gravacao em thread (0.65)
 
-| Variable / UI | Effect |
+Com gravacao em thread, o produtor usa handles internos traduzidos pelos thunks Vulkan-Hpp.
+NGX carrega entrypoints Vulkan diretamente e nao passa por essa traducao. Por isso, nao pode
+receber o handle do produtor nem gravar em paralelo com o consumidor.
+
+`Scheduler::RecordSynchronous` coloca criacao e avaliacao em um callback depois das conversoes
+e barreiras anteriores. O consumidor entrega o `VkCommandBuffer` real ao callback. O produtor
+espera a execucao e a destruicao das capturas antes de ler o resultado e gravar a transicao de
+saida ou o fallback. E uma espera de CPU, nao um novo `deviceWaitIdle`. Com handle real, o
+callback executa diretamente na thread chamadora, inclusive sem gravacao em thread.
+
+## Configuracao
+
+| Variavel / UI | Efeito |
 |---|---|
-| `SOTC_DLSS=0` | Off; FSR 1 is used. |
-| `SOTC_DLSS=1` | On when the DLLs and an RTX card are present (the default). |
-| `SOTC_UPSCALER=dlss/fsr1/bilinear` | Startup selection, shared with the launcher and in-game menu. FSR 1/bilinear selection does not disable NGX, so DLSS can still be selected live. |
-| `SOTC_RENDER_RES=WxH` | The game renders smaller; `SOTC_OUTPUT_RES=WxH` keeps the presentation size — DLSS upscales between them. |
-| Menu → Quick settings → Upscaler | DLSS / FSR 1 / Bilinear, applied at the next frame. |
-| Menu → Nitidez (RCAS) | Also sets DLSS sharpness (0..1); unlike RCAS attenuation, larger values mean stronger sharpening. |
+| `SOTC_DLSS=0` | Impede NGX para a sessao; DLSS selecionado usa FSR 1. |
+| `SOTC_DLSS=1` | Habilita quando ha DLLs e RTX compativel (padrao). |
+| `SOTC_UPSCALER=dlss/fsr1/bilinear` | Selecao inicial, compartilhada com os menus. FSR 1/bilinear nao usa SR, mas permite inicializar NGX para trocar para DLSS ao vivo. |
+| `SOTC_RENDER_RES=WxH` / `SOTC_OUTPUT_RES=WxH` | Resolucao do jogo e resolucao de apresentacao; DLSS amplia entre elas. |
+| Menu > Configuracoes rapidas > Upscaler | DLSS / FSR 1 / Bilinear, aplicado no proximo quadro. |
+| Menu > Nitidez (RCAS) | Tambem controla nitidez DLSS (0..1); ao contrario da atenuacao RCAS, maior significa mais nitidez. |
 
-New launcher settings default to `dlss`; existing `fsr1`/`bilinear` settings are not migrated.
-Explicit DLSS selection always leaves FSR 1 enabled as its fallback. For older scripts without
-`SOTC_UPSCALER`, an explicit `BB_FSR1=0` still selects bilinear; otherwise DLSS is preferred.
-`SOTC_DLSS=0` is a hard disable for that session, not the launcher's mode selector.
+Configuracoes novas usam `dlss`; escolhas existentes `fsr1`/`bilinear` sao preservadas. DLSS
+selecionado sempre deixa FSR 1 disponivel como fallback. Sem `SOTC_UPSCALER`, um `BB_FSR1=0`
+explicito seleciona bilinear; caso contrario, DLSS e preferido. `SOTC_DLSS=0` impede ate a
+inicializacao NGX, nao e apenas o seletor de upscaler.
 
-## Fallbacks (all print `SOTC DLSS:` once and keep FSR 1)
+## Fallbacks
 
-- DLLs missing, non-NVIDIA GPU, NGX init or capability failure, required extensions missing.
-- A frame without a G-buffer draw (menu, movie, loading) has no depth/motion: no inputs, FSR 1.
-- Feature creation/evaluation failure.
-- Render or output size changes after the feature exists: rebuilding NGX's feature while the GPU
-  may still read it is unsafe, so DLSS stays off until a restart. Changing `SOTC_RENDER_RES` or
-  `SOTC_OUTPUT_RES` therefore needs a restart.
-- HDR output keeps FSR 1 (the 10-bit buffer is PQ encoded; DLSS would need linear values).
+- DLLs ausentes, GPU nao NVIDIA, falha de inicializacao/capacidade NGX ou extensoes ausentes.
+- Sem dados G-buffer de profundidade/movimento em menus, filmes e carregamento: usa FSR 1.
+- Criacao/avaliacao retorna falha: registra o motivo e desativa SR pelo resto da sessao.
+- Resolucao ou parametros da feature mudam depois da criacao: mantem SR desligado ate reiniciar,
+  pois reconstruir a feature enquanto a GPU ainda pode usa-la nao e seguro.
+- Saida HDR: mantem FSR 1, pois o buffer de 10 bits esta em PQ e DLSS precisaria de valores lineares.
 
-## Verifying a run
+Esses caminhos nao garantem recuperacao de um acesso invalido no driver. A queda RTX 3070
+relatada e o contorno FSR 1 estao documentados em
+[CRASH-NVIDIA-2026-10-25.md](CRASH-NVIDIA-2026-10-25.md). A 0.65 corrige o handoff do comando;
+o teste com DLSS no PC afetado ainda e necessario.
 
-1. `SOTC DLSS: ready` in `user/last_run.log` (or stderr) — the DLLs loaded, NGX initialized.
-2. `SOTC DLSS: feature creation failed` / `evaluation failed` — NGX rejected the parameters; the
-   game keeps running on FSR 1.
-3. At native size the image should be DLAA: slightly cleaner edges than FSR 1, HUD included (the
-   whole frame is upscaled, as with FSR 1).
-4. With `SOTC_RENDER_RES=1280x720` + `SOTC_OUTPUT_RES=1920x1080` the image should be sharper than
-   bilinear and less aliased than 720p; `SOTC DLSS: DLSS 1280x720 -> 1920x1080, quality 1` in
-   the log.
-5. Exit the game: no crash after the swapchain is destroyed (NGX is shut down in
-   `Instance::~Instance`, before the device).
-6. Select FSR 1 or Bilinear in the launcher, then DLSS in F1: switching should work without a
-   restart. Close and reopen the launcher: the saved choice must still be selected.
-7. With DLSS selected, menus/movies and `SOTC_DLSS=0` must keep the FSR 1 fallback, not silently
-   disable it. Check High/Medium/Low/Off sharpening in that order; the DLSS parameter must
-   decrease rather than increase. Visual verification still needs an RTX Windows run.
+## Verificar uma execucao
 
-## Building
+1. Comece com geracao de quadros desligada e DLSS selecionado; preserve as demais opcoes.
+2. `SOTC DLSS: ready` em `user/last_run.log` significa somente que DLLs e NGX inicializaram.
+   Tambem aparece com FSR 1 selecionado; sozinho nao verifica uso de DLSS.
+3. Na 0.65, `creating ... (real command buffer)` indica a tentativa na fronteira NGX. A linha
+   seguinte `SOTC DLSS: DLSS WxH -> WxH, quality N` confirma a criacao, nao a qualidade visual.
+   `feature creation failed` / `evaluation failed` indica falha retornada e fallback para FSR 1.
+4. Entre no jogo, onde ha G-buffer. Na resolucao nativa, espere DLAA com HUD incluido; com
+   `SOTC_RENDER_RES=1280x720` e `SOTC_OUTPUT_RES=1920x1080`, compare DLSS com FSR 1 e bilinear.
+   Teste camera, movimento, cortes e nitidez Alta/Media/Baixa/Desligada. Nitidez DLSS deve diminuir.
+5. Troque FSR 1/bilinear para DLSS no F1, volte e confira os menus/filmes. A selecao persiste
+   ao fechar e abrir o lancador; sem inputs DLSS, seu fallback deve continuar disponivel.
+6. Saia normalmente. NGX deve encerrar antes do device Vulkan em `Instance::~Instance`.
+7. Se cair, guarde log e dump da mesma sessao. `GPU context` pode identificar
+   `NGX DLSS CreateFeature` ou `NGX DLSS Evaluate` na thread real. Nao envie jogo/firmware.
 
-CI builds the bridge with MSVC (`.github/workflows/build-windows.yml`) and copies
-`out/dlss-bridge/sotc_dlss.dll` + NVIDIA's `nvngx_dlss.dll` into the package. Locally:
+O teste automatizado com driver simulado cobre o gravador de producao sem GPU/NGX: ordem,
+handles, thread proprietaria, resultados e vida das capturas. Nao valida parametros NGX,
+sincronizacao da GPU, qualidade visual ou estabilidade no jogo.
+
+## Compilar
+
+O CI compila a ponte com MSVC (`.github/workflows/build-windows.yml`) e copia
+`out/dlss-bridge/sotc_dlss.dll` e `nvngx_dlss.dll` para o pacote. Localmente:
 
 ```bash
 cmake -S gpu/dlss_bridge -B out/dlss-bridge -G Ninja -DCMAKE_BUILD_TYPE=Release \
@@ -96,5 +115,5 @@ cmake -S gpu/dlss_bridge -B out/dlss-bridge -G Ninja -DCMAKE_BUILD_TYPE=Release 
 cmake --build out/dlss-bridge
 ```
 
-The bridge is deliberately outside the main CMake project: `bbgpu` is built with Clang and must
-never see the MSVC-only NGX libraries.
+A ponte fica fora do CMake principal: `bbgpu` usa Clang e nao deve receber as bibliotecas
+NGX exclusivas de MSVC.

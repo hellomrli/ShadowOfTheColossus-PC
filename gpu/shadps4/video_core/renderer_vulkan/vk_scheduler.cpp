@@ -57,6 +57,10 @@ void Scheduler::RecordDeferred(Common::UniqueFunction<void, vk::CommandBuffer>&&
     });
 }
 
+bool Scheduler::RecordSynchronous(Common::UniqueFunction<bool, vk::CommandBuffer>&& func) {
+    return CommandRecorder::RecordSynchronous(CommandBuffer(), std::move(func));
+}
+
 void Scheduler::BeginRecorded(vk::CommandBuffer fake) {
     const vk::CommandBuffer real = command_pool.Commit();
     Check(real.begin(vk::CommandBufferBeginInfo{

@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.65 (pre-release) — 2026-10-25
+- **DLSS com gravacao em thread:** NGX recebia o handle interno de comando usado pelo produtor,
+  nao um `VkCommandBuffer` real. NGX carrega as funcoes Vulkan diretamente e nao passa pelos
+  thunks que traduzem esse handle. Criacao e avaliacao agora executam na thread do gravador,
+  na ordem das conversoes/barreiras, com o handle real. Uma espera de CPU preserva o resultado
+  e a vida dos parametros antes de escolher o fallback; nao e uma espera de GPU/device idle.
+- **Protecao e diagnostico:** a fronteira DLSS recusa handles nulos/internos. O log informa
+  dimensoes e qualidade antes da criacao; `GPU context` identifica `NGX DLSS CreateFeature`
+  ou `NGX DLSS Evaluate` na thread que executa a chamada. Labels de debug sao fechadas
+  tambem quando NGX retorna falha, mantendo a selecao de FSR 1.
+- **RTX 3070:** o terceiro log, ja na 0.64 com zero patches fixos de CPU e frame generation
+  desligado, mostrou `sotc_dlss.dll -> _nvngx.dll -> 160_E658700.bin -> nvoglv64.dll`.
+  Os offsets da DLL publicada correspondem a `NVSDK_NGX_VULKAN_CreateFeature1`, nao a
+  avaliacao de um shader do jogo. O defeito do handle esta corrigido no codigo; a eliminacao
+  da queda ainda precisa de teste no PC afetado. Nao foram alterados os padroes de DLSS,
+  gravacao em thread ou frame generation para mascarar o problema.
+- **Controle do jogador:** selecionar FSR 1 evitou a queda anterior numa sessao de cerca de
+  dez minutos, encerrada com codigo 0. `DLSS: ready` nesse log indica apenas inicializacao,
+  nao uso de SR. E um contorno observado antes desta publicacao, nao validacao da correcao.
+- **Regressao sem GPU/NGX:** o gravador real e exercitado com um driver simulado: traducao
+  do handle, ordem entre conversoes/SDK/fallback, propriedade da thread, resultados de
+  sucesso/falha, capturas move-only e sincronizacao da vida dos parametros. Caminhos sem
+  gravador e com handles reais continuam sincronos na thread chamadora. Sem mudanca do
+  formato ou da saida do cache de shaders.
+
 ## 0.64 (pre-release) — 2026-10-25
 - **Protecao dos patches de CPU:** os tres offsets fixos de red zone so sao usados quando o
   codigo do `eboot.bin` passa pela verificacao EU 1.01 dos modos. O `TITLE_ID` no `param.sfo`

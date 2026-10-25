@@ -20,6 +20,10 @@
 #include "video_core/renderer_vulkan/vk_dlss.h"
 #include "video_core/texture_cache/image.h"
 
+namespace Vulkan {
+class Scheduler;
+}
+
 namespace Vulkan::HostPasses {
 
 class DlssUpscaler {
@@ -45,7 +49,7 @@ public:
 
     /// Returns the upscaled view (RGBA16F, output size), or null when DLSS did not run this
     /// frame (the caller then keeps its FSR 1 path).
-    vk::ImageView Render(vk::CommandBuffer cmdbuf, vk::ImageView color, vk::Format color_format,
+    vk::ImageView Render(Scheduler& scheduler, vk::ImageView color, vk::Format color_format,
                          vk::Extent2D input_size, vk::Extent2D output_size, u32 frame_id,
                          const Inputs& inputs, float frame_ms);
 

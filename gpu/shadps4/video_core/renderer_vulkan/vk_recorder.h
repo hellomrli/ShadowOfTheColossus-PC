@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "common/types.h"
+#include "common/unique_function.h"
 #include "video_core/renderer_vulkan/vk_common.h"
 
 namespace Vulkan {
@@ -53,6 +54,12 @@ public:
     static void InstallThunks();
 
     [[nodiscard]] static bool IsFake(VkCommandBuffer cmdbuf) noexcept;
+
+    /// sotc: external SDKs bypass the dispatcher thunks. Run their callback in stream order
+    /// with a real command buffer, waiting for its result and captured data before returning.
+    /// A real handle (including when recording is disabled) runs inline instead.
+    [[nodiscard]] static bool RecordSynchronous(
+        vk::CommandBuffer cmdbuf, Common::UniqueFunction<bool, vk::CommandBuffer>&& func);
 
     /// Give the producer a fake handle for a command buffer that the consumer will allocate later
     /// The queued closure calls Bind to connect it with the real buffer before recording its

@@ -73,3 +73,17 @@ jobs:
           out/cache-blob-test
           g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread -Igpu/shadps4 tests/test_gpu_diagnostics.cpp -o out/gpu-diagnostics-test
           out/gpu-diagnostics-test
+
+      - name: Recorded external calls (no GPU or NGX)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libfmt-dev
+          git clone --depth 1 --branch v1.4.357 https://github.com/KhronosGroup/Vulkan-Headers.git out/vulkan-headers
+          g++ -std=c++20 -O2 -Wall -Wextra -Werror -Wno-unknown-pragmas -Wno-missing-field-initializers \
+            -pthread -Igpu/shim -Igpu/shadps4 -isystem out/vulkan-headers/include \
+            tests/test_recorded_external.cpp gpu/shadps4/video_core/renderer_vulkan/vk_recorder.cpp \
+            gpu/shim/common/logging/log.cpp -lfmt -o out/recorded-external-test
+          timeout 30s out/recorded-external-test

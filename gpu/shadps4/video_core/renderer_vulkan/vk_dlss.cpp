@@ -11,6 +11,8 @@
 #include <string_view>
 
 #include "video_core/renderer_vulkan/vk_dlss.h"
+#include "video_core/gpu_diagnostics.h"
+#include "video_core/renderer_vulkan/vk_recorder.h"
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -209,10 +211,19 @@ bool Dlss::CreateFeature(vk::CommandBuffer command, const FeatureDesc& desc) {
     if (!impl->available) {
         return false;
     }
+    // sotc: never let an internal placeholder reach NGX's unhooked Vulkan entrypoints.
+    if (!command || CommandRecorder::IsFake(command)) {
+        std::fprintf(stderr, "SOTC DLSS: rejected invalid/recorded command buffer at creation\n");
+        return false;
+    }
     impl->feature.reset();
     const SotcDlssFeature feature{desc.input_width,  desc.input_height, desc.output_width,
                                   desc.output_height, desc.quality,      desc.depth_inverted ? 1 : 0,
                                   0,                  desc.hdr ? 1 : 0};
+    std::fprintf(stderr, "SOTC DLSS: creating %ux%u -> %ux%u, quality %d (real command buffer)\n",
+                 desc.input_width, desc.input_height, desc.output_width, desc.output_height,
+                 desc.quality);
+    const SotcGpuDiagnostics::Scope diagnostic{"NGX DLSS CreateFeature"};
     if (!impl->api->CreateFeature(command, &feature)) {
         return false;
     }
@@ -222,6 +233,10 @@ bool Dlss::CreateFeature(vk::CommandBuffer command, const FeatureDesc& desc) {
 
 bool Dlss::Evaluate(vk::CommandBuffer command, const Frame& frame) {
     if (!impl->available || !impl->feature) {
+        return false;
+    }
+    if (!command || CommandRecorder::IsFake(command)) {
+        std::fprintf(stderr, "SOTC DLSS: rejected invalid/recorded command buffer at evaluation\n");
         return false;
     }
     const auto image = [](const Resource& r) {
@@ -239,6 +254,7 @@ bool Dlss::Evaluate(vk::CommandBuffer command, const Frame& frame) {
                                       frame.reset ? 1 : 0, frame.frame_ms,
                                       frame.sharpness,    frame.mv_scale_x,
                                       frame.mv_scale_y};
+    const SotcGpuDiagnostics::Scope diagnostic{"NGX DLSS Evaluate"};
     return impl->api->Evaluate(command, &parameters) != 0;
 }
 
