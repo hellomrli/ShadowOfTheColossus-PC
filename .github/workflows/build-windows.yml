@@ -65,6 +65,12 @@ jobs:
           bash -x build.sh
           ninja -C out/gpu sotc-live-test
           ./out/gpu/sotc-live-test.exe
+          clang -std=c11 -O2 -fomit-frame-pointer -Wall -Wextra -Werror tests/test_win_unwind.c -lntdll -o out/win-unwind-test.exe
+          ./out/win-unwind-test.exe
+          clang++ -std=c++20 -O2 -Wall -Wextra -Werror -Igpu/shadps4 tests/test_cache_blob.cpp gpu/shadps4/video_core/cache_blob.cpp -o out/cache-blob-test.exe
+          ./out/cache-blob-test.exe
+          clang++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread -Igpu/shadps4 tests/test_gpu_diagnostics.cpp -o out/gpu-diagnostics-test.exe
+          ./out/gpu-diagnostics-test.exe
 
       - name: NVIDIA DLSS SDK (headers, import library, runtime)
         shell: pwsh

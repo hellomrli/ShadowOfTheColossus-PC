@@ -32,6 +32,7 @@
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_shader_util.h"
 #include "video_core/sotc_stats.h"
+#include "video_core/gpu_diagnostics.h"
 
 namespace Vulkan {
 
@@ -1130,6 +1131,9 @@ vk::ShaderModule PipelineCache::CompileModule(Shader::Info& info, Shader::Runtim
                                               Shader::Backend::Bindings& binding,
                                               Shader::Pools* worker_pools,
                                               std::vector<u32>* spv_out) {
+    // sotc: shader identity is retained through translation and driver module creation.
+    const SotcGpuDiagnostics::Scope diagnostic{
+        "compile shader", info.pgm_hash, perm_idx, static_cast<int>(info.hw_stage)};
     LOG_INFO(Render_Vulkan, "Compiling {} shader {:#x} {}", info.hw_stage, info.pgm_hash,
              perm_idx != 0 ? "(permutation)" : "");
     // sotc: the frame columns are command-processor time; worker time is counted apart.

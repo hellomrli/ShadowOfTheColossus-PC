@@ -17,6 +17,7 @@
 #include "common/logging/log.h"
 #include "common/perf_stats.h"
 #include "common/thread.h"
+#include "video_core/gpu_diagnostics.h"
 #include "video_core/renderer_vulkan/vk_recorder.h"
 
 #if defined(_M_X64) || defined(__x86_64__)
@@ -75,6 +76,7 @@ struct GenericThunk<Member, R(VKAPI_PTR*)(VkCommandBuffer, Args...)> {
 
     static R VKAPI_CALL Call(VkCommandBuffer cmdbuf, Args... args) {
         if (!CommandRecorder::IsFake(cmdbuf)) {
+            const SotcGpuDiagnostics::Scope diagnostic{name};
             return real(cmdbuf, args...);
         }
         // Commands returning a result, such as VK_INTEL_performance_query calls, need an immediate
@@ -83,7 +85,10 @@ struct GenericThunk<Member, R(VKAPI_PTR*)(VkCommandBuffer, Args...)> {
             FailUncovered(name);
         } else {
             g_recorder->CountCommand();
-            g_recorder->Run([cmdbuf, args...] { real(g_recorder->Real(cmdbuf), args...); });
+            g_recorder->Run([cmdbuf, args...] {
+                const SotcGpuDiagnostics::Scope diagnostic{name};
+                real(g_recorder->Real(cmdbuf), args...);
+            });
         }
     }
 };
@@ -101,7 +106,11 @@ void InstallGeneric(MemberPfn<Member>& slot, const char* name) {
 
 template <auto Member>
 auto RealOf() {
-    return GenericThunk<Member>::real;
+    // sotc: custom deep-copy thunks need the operation name on the consuming thread too.
+    return [](auto... args) -> decltype(auto) {
+        const SotcGpuDiagnostics::Scope diagnostic{GenericThunk<Member>::name};
+        return GenericThunk<Member>::real(args...);
+    };
 }
 
 // Copy pointer arguments before sending a command to the recording thread so the caller can reuse
@@ -522,6 +531,7 @@ PFN_vkResetCommandBuffer real_reset{};
 
 VkResult VKAPI_CALL BeginCommandBuffer(VkCommandBuffer cmdbuf,
                                        const VkCommandBufferBeginInfo* info) {
+    const SotcGpuDiagnostics::Scope diagnostic{"vkBeginCommandBuffer"};
     if (!CommandRecorder::IsFake(cmdbuf)) {
         return real_begin(cmdbuf, info);
     }
@@ -529,10 +539,12 @@ VkResult VKAPI_CALL BeginCommandBuffer(VkCommandBuffer cmdbuf,
 }
 
 VkResult VKAPI_CALL EndCommandBuffer(VkCommandBuffer cmdbuf) {
+    const SotcGpuDiagnostics::Scope diagnostic{"vkEndCommandBuffer"};
     if (!CommandRecorder::IsFake(cmdbuf)) {
         return real_end(cmdbuf);
     }
     g_recorder->Run([cmdbuf] {
+        const SotcGpuDiagnostics::Scope diagnostic{"vkEndCommandBuffer"};
         const VkResult result = real_end(g_recorder->Real(cmdbuf));
         ASSERT_MSG(result == VK_SUCCESS, "cp_record_thread: vkEndCommandBuffer failed: {}",
                    vk::to_string(vk::Result{result}));
@@ -541,10 +553,14 @@ VkResult VKAPI_CALL EndCommandBuffer(VkCommandBuffer cmdbuf) {
 }
 
 VkResult VKAPI_CALL ResetCommandBuffer(VkCommandBuffer cmdbuf, VkCommandBufferResetFlags flags) {
+    const SotcGpuDiagnostics::Scope diagnostic{"vkResetCommandBuffer"};
     if (!CommandRecorder::IsFake(cmdbuf)) {
         return real_reset(cmdbuf, flags);
     }
-    g_recorder->Run([cmdbuf, flags] { real_reset(g_recorder->Real(cmdbuf), flags); });
+    g_recorder->Run([cmdbuf, flags] {
+        const SotcGpuDiagnostics::Scope diagnostic{"vkResetCommandBuffer"};
+        real_reset(g_recorder->Real(cmdbuf), flags);
+    });
     return VK_SUCCESS;
 }
 
@@ -940,6 +956,8 @@ void CommandRecorder::ConsumerLoop(std::stop_token stoken) {
                 continue;
             }
             if (header->kind == BlockKind::Command) {
+                const SotcGpuDiagnostics::Scope diagnostic{
+                    "recorded command", 0, 0, -1, reinterpret_cast<std::uintptr_t>(header->invoke)};
                 header->invoke(header + 1);
             }
             pos += header->size;

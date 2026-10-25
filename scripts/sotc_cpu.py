@@ -10,6 +10,7 @@ import argparse
 import struct
 from pathlib import Path
 from prepare import parse_self, sfo
+from sotc_modes import is_supported
 
 PT_GNU_EH_FRAME = 0x6474e550
 RED_ZONE_FUNCTIONS = {
@@ -27,18 +28,22 @@ def main():
     parser.add_argument('game', type=Path)
     parser.add_argument('--out', type=Path, default=Path(__file__).resolve().parent.parent / 'out')
     args = parser.parse_args()
-    _, _, ph, _, _ = parse_self((args.game / 'eboot.bin').read_bytes())
+    elf, _, ph, _, _ = parse_self((args.game / 'eboot.bin').read_bytes())
     eh = next((p for p in ph if p['type'] == PT_GNU_EH_FRAME), None)
     loads = [p for p in ph if p['type'] in (1, 0x61000010)]
     if eh and not any(p['vaddr'] <= eh['vaddr'] and eh['vaddr'] + eh['memsz'] <= p['vaddr'] + p['filesz'] for p in loads):
         raise SystemExit('PT_GNU_EH_FRAME is not inside a loaded segment')
     serial = sfo((args.game / 'sce_sys/param.sfo').read_bytes()).get('TITLE_ID', '')
-    functions = RED_ZONE_FUNCTIONS.get(serial, ())
+    supported = is_supported(elf, ph)
+    functions = RED_ZONE_FUNCTIONS.get(serial, ()) if supported else ()
+    if not supported:
+        print('CPU patches: this eboot is not verified EU 1.01; fixed-address red-zone patches disabled')
     with (args.out / 'sotc-cpu.bin').open('wb') as f:
         f.write(struct.pack('<8sQQQ', b'SOTCCPU1', eh['vaddr'] if eh else 0, eh['memsz'] if eh else 0, len(functions)))
         for offset in functions:
             f.write(struct.pack('<Q', offset))
-    print(f'CPU patches: {serial}, eh_frame_hdr={eh["vaddr"]:#x}+{eh["memsz"]:#x}, '
+    frame = f'{eh["vaddr"]:#x}+{eh["memsz"]:#x}' if eh else 'absent'
+    print(f'CPU patches: {serial}, executable EU 1.01 verified={supported}, eh_frame_hdr={frame}, '
           f'{len(functions)} red-zone functions')
 
 

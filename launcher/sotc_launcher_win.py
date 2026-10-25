@@ -38,7 +38,7 @@ CONFIG_DIR = PORT_DIR / 'user'
 CONFIG_FILE = CONFIG_DIR / 'launcher_settings.json'
 GAME_ID, GAME_VERSION = 'CUSA08809', '01.01'
 SYS_MODULES = ('libSceUlt.sprx', 'libSceNgs2.sprx')
-VERSION = '0.63'
+VERSION = '0.64'
 MAX_LOG_LINES = 6000
 NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 
@@ -332,6 +332,37 @@ def game_info(folder):
     except (OSError, ValueError, ImportError):
         title, version = '?', '?'
     return title, eboot_version(folder / 'eboot.bin') or version
+
+
+def game_supports_modes(folder, extra_env=''):
+    """Verify the executable actually launched, not the version claimed by param.sfo."""
+    env = dict(os.environ)
+    env['SOTC_GAME_DIR'] = str(folder or '.')
+    try:
+        lines = (PORT_DIR / 'sotc.ini').read_text(encoding='utf-8', errors='replace').splitlines()
+    except OSError:
+        lines = []
+    for line in lines:
+        line = line.strip()
+        if line and not line.startswith(('#', ';')) and '=' in line:
+            key, value = line.split('=', 1)
+            env.setdefault(key.strip(), value.strip())
+    for item in extra_env.split():
+        if '=' in item:
+            key, value = item.split('=', 1)
+            env[key] = value
+    game = Path(env['SOTC_GAME_DIR'])
+    game = (game if game.is_absolute() else PORT_DIR / game).resolve()
+    # Same source precedence as sotc.py: explicit update, adjacent update, then base eboot.
+    named = env.get('SOTC_UPDATE_DIR')
+    update = Path(named) if named else next(
+        (p for suffix in ('-UPDATE', '-patch') if (p := game.with_name(game.name + suffix)).is_dir()), None)
+    if update and not update.is_absolute():
+        update = PORT_DIR / update  # sotc.py changes to PORT_DIR before resolving this path.
+    executable = game / 'eboot.bin'
+    if update and (update / 'eboot.bin').is_file():
+        executable = update / 'eboot.bin'
+    return eboot_version(executable) == GAME_VERSION
 
 
 def user_dir(s):
@@ -1376,11 +1407,11 @@ class Launcher:
         info = game_info(self.var('game_dir').get())
         if not info:
             game = _('✗ Não há eboot.bin na pasta do jogo (Jogo e saves)', '✗ No eboot.bin in the game folder (Game & saves)')
-        elif info == (GAME_ID, GAME_VERSION):
-            game = _('✓ {} versão {}: todos os modos disponíveis', '✓ {} version {}: every mode available').format(*info)
+        elif info[0] == GAME_ID and game_supports_modes(self.var('game_dir').get(), self.var('extra_env').get()):
+            game = _('✓ {} versão {}: todos os modos disponíveis', '✓ {} version {}: every mode available').format(info[0], GAME_VERSION)
         else:
-            game = _('⚠ {} versão {}: o port foi feito para {} {}; os modos não se aplicam',
-                     '⚠ {} version {}: the port targets {} {}; the modes do not apply').format(*info, GAME_ID, GAME_VERSION)
+            game = _('⚠ {} versão {}: executável não verificado para {} {}; os modos não se aplicam',
+                     '⚠ {} version {}: executable not verified for {} {}; the modes do not apply').format(*info, GAME_ID, GAME_VERSION)
         modules = Path(self.var('sys_modules').get() or '.')
         if self.var('sys_modules').get() and all((modules / m).is_file() for m in SYS_MODULES):
             sound = _('✓ Módulos de som encontrados', '✓ Sound modules found')

@@ -6,6 +6,7 @@
 #include <boost/container/small_vector.hpp>
 
 #include "common/assert.h"
+#include "video_core/gpu_diagnostics.h"
 #include "shader_recompiler/backend/spirv/emit_spirv_discard_frag.h"
 #include "shader_recompiler/backend/spirv/emit_spirv_quad_rect.h"
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
@@ -453,6 +454,9 @@ GraphicsPipeline::GraphicsPipeline(
         .layout = *pipeline_layout,
     };
 
+    // sotc: report the exact pipeline stage keys if the driver faults instead of returning.
+    const SotcGpuDiagnostics::Scope diagnostic{
+        "vkCreateGraphicsPipelines", key.stage_hashes.data(), key.stage_hashes.size()};
     auto [pipeline_result, pipe] =
         device.createGraphicsPipelineUnique(pipeline_cache, pipeline_info);
     if (pipeline_result != vk::Result::eSuccess && preloading) {

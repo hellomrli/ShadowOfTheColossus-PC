@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.64 (pre-release) — 2026-10-25
+- **Protecao dos patches de CPU:** os tres offsets fixos de red zone so sao usados quando o
+  codigo do `eboot.bin` passa pela verificacao EU 1.01 dos modos. O `TITLE_ID` no `param.sfo`
+  sozinho nao autoriza esses patches. O lancador verifica o executavel efetivo da atualizacao
+  ou do jogo base, respeitando `SOTC_UPDATE_DIR`, o ini e as variaveis extras.
+- **Cache:** leituras vazias, incompletas, desalinhadas ou maiores que 64 MiB sao tratadas como
+  cache ausente; arquivos SPIR-V passam tambem por uma verificacao estrutural das instrucoes.
+  Corrigido overflow ao extrair do ZIP um blob cujo tamanho nao era multiplo de uma palavra.
+  Falha de leitura/CRC nao deixa dados parciais no vetor. Cache frio sem `.spv` deixa de gerar
+  uma linha de erro por shader.
+- **Gravacao do cache:** confirma escrita, flush e fechamento antes de publicar o arquivo
+  temporario. No Windows a substituicao do arquivo antigo usa `MoveFileExW`; uma falha nao
+  publica o blob incompleto. Nao muda a versao/formato do cache nem a saida do compilador de shaders.
+- **Diagnostico:** quedas nativas no Windows passam a imprimir a pilha do contexto original
+  usando as tabelas de unwind, inclusive DLLs sem RBP. O relatorio inclui a operacao Vulkan
+  instrumentada na thread da falha, hash/permutacao do shader ou chaves do pipeline quando
+  disponiveis. Uma falha ao inspecionar esse contexto nao impede o dump original.
+- **RTX 3070:** as duas sessoes relatadas caem em `nvoglv64.dll+0xe35140`, inclusive com frame
+  generation desligado; ambas ainda inicializam DLSS. A causa permanece aberta, sem acesso aos
+  dumps ou reproducao numa RTX aqui. Testar `SOTC_DLSS=0` com reinicio e, separadamente,
+  `SOTC_RECORD_THREAD=0`; nao forcar os offsets EU. Receita e evidencias em
+  `docs/sotc/CRASH-NVIDIA-2026-10-25.md`. Nenhum padrao do renderer foi alterado.
+- **Regressoes sem GPU:** novos testes de executavel sintetico, selecao de atualizacao, blobs
+  de cache, contexto de GPU por thread e unwind nativo no Windows. O CI tambem confere o
+  lancador congelado e as dependencias do loader sem MSYS2 no PATH; isso nao valida gameplay.
+
 ## 0.63 (pre-release) — 2026-10-25
 - **Pre-release deste fork:** inclui as correcoes da 0.62; a imagem e as trocas de modo do DLSS
   ainda precisam de verificacao no Windows com RTX. O cache de shaders e refeito na primeira

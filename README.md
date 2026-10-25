@@ -1,9 +1,10 @@
-# Shadow of the Colossus — PC native port · v0.63 (preview)
+# Shadow of the Colossus — PC native port · v0.64 (preview)
 
 [Releases](../../releases) · [Changelog](CHANGELOG.md)
 
-**v0.63 is a prerelease of this fork.** It includes the v0.62 shader backports and the review
-fixes listed below; Windows/RTX gameplay and image quality still need testing. Download previews
+**v0.64 is a prerelease of this fork.** It adds executable patch guards, safer cache reads/writes
+and driver-crash diagnostics to v0.63; the reported RTX 3070 startup crash is still under
+investigation, not confirmed fixed. Windows/RTX gameplay and image quality still need testing. Download previews
 manually from Releases: the launcher's updater follows this fork's stable releases, not previews
 or upstream releases. Keep a backup of `user/` and `sotc.ini` when moving to a new directory.
 
@@ -25,6 +26,7 @@ game needs, in the style of [bloodborne_pc](https://github.com/Supermedo/bloodbo
 
 | Version | Improvements and fixes |
 |---|---|
+| **0.64 (preview)** | **Verify the actual executable before fixed-address CPU patches**, including update selection in the launcher; reject malformed/truncated cache blobs and publish only complete writes; **native Windows crash stacks and active Vulkan operation/shader context**. RTX 3070 driver-crash investigation remains open; no shader-output or renderer-default changes. |
 | **0.63 (preview)** | **Safer self-updates** with protected saves/settings and retained recovery backups; persistent **DLSS / FSR 1 / Bilinear** selection in both menus, corrected DLSS sharpening and history reset; reliable preparation cache/update overlays; **complete DLL dependencies for PCs without MSYS2**, clean-checkout packaging and Linux/Windows regression checks. |
 | **0.62 (preview)** | **DLSS in the F1 menu**, ten upstream shader/recompiler fixes, and NGX shutdown before Vulkan device destruction. Shader cache version 38: upgrading from 0.61 rebuilds the cache on first start. |
 | **0.61** | **DLSS Super Resolution (RTX 20 and newer)**: the package now ships this project's MIT `sotc_dlss.dll` bridge and NVIDIA's `nvngx_dlss.dll`; with an RTX card DLSS replaces FSR 1 automatically — **DLAA** at native size, **Super Resolution** when the game renders below the output size. Windows builds are produced by GitHub Actions. |
@@ -117,6 +119,11 @@ In the launcher (**Quick settings → Textures**) and in the in-game menu (chang
 
 ### Known issues
 
+- **RTX 3070 startup crash in `nvoglv64.dll+0xe35140`:** reported both with FSR 3 and with frame
+  generation off. Both sessions still initialized DLSS. Keep frame generation off, then test
+  `SOTC_DLSS=0` in **Advanced → Extra variables** and restart; selecting FSR 1 alone does not
+  disable NGX. Test `SOTC_RECORD_THREAD=0` separately, changing one variable at a time. Send the
+  new log and matching dump if it persists. [Investigation and patch safety](docs/sotc/CRASH-NVIDIA-2026-10-25.md).
 - The first start after updating rebuilds the shaders: the first load is slow and stutters.
 - **Texture quality "Maximum"** can close the game in very wide views (sword raised against the
   sun, the last colossus' area; #186). Since 0.60.6 it is not available in PS4 Pro mode, where it
@@ -153,7 +160,10 @@ driver). No Python install needed.
 | CUSA08809 game dump (EU 1.01 preferred) | your PS4, through GoldHEN | the game |
 | decrypted `libSceNgs2.sprx`, `libSceUlt.sprx` | your PS4 (`/system/common/lib/`, GoldHEN FTP), or shadPS4's `user/sys_modules` | sound (silent without them) |
 
-The patch modes (60 FPS, 16x filtering) only apply to EU 1.01; other versions run at 30 FPS.
+The patch modes (60 FPS, 16x filtering) only apply to a verified EU 1.01 executable; a folder
+name or `param.sfo` version is not verification. Fixed-address red-zone CPU patches use the
+same executable check. Other dumps are not validated by this release; do not force EU offsets
+or edit metadata to bypass the check.
 
 ### Launcher features
 
@@ -195,9 +205,11 @@ g++ -std=c++20 -O2 -Wall -Wextra -Werror -I. tests/test_sotc_live.cpp -o out/sot
 out/sotc-live-test
 ```
 
-The standalone C++ test needs no GPU or game dump. Python tests that need a native binary are
+The standalone C++ tests need no GPU or game dump. Python tests that need a native binary are
 reported as skipped until that binary is built. CI runs the Python suite on Linux, the launcher,
-updater and preparation tests on Windows, and the live-settings test on both build paths.
+updater and preparation tests on Windows, and live-settings, cache-blob and diagnostic-context
+tests on both build paths. The Windows build also tests native unwinding with frame pointers
+omitted. The patch-guard tests use small synthetic executables, not game or firmware files.
 Current native-test gaps and Windows verification steps are recorded in the
 [review notes](docs/sotc/REVIEW-2026-10-25.md).
 

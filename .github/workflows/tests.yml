@@ -39,6 +39,10 @@ jobs:
         if: runner.os == 'Windows'
         run: python -m unittest discover -s tests -p test_sotc.py -v
 
+      - name: Executable patch safety tests (Windows)
+        if: runner.os == 'Windows'
+        run: python -m unittest discover -s tests -p test_sotc_cpu.py -v
+
       - name: Launcher regression tests (Windows)
         if: runner.os == 'Windows'
         run: python -m unittest discover -s tests -p "test_launcher*.py" -v
@@ -59,3 +63,13 @@ jobs:
           SOTC_UPSCALER=dlss BB_FSR1=0 out/sotc-live-test 0
           SOTC_UPSCALER=fsr1 out/sotc-live-test 1
           SOTC_UPSCALER=bilinear out/sotc-live-test 2
+
+      - name: Cache blob and crash-context tests (no GPU)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          g++ -std=c++20 -O2 -Wall -Wextra -Werror -Igpu/shadps4 tests/test_cache_blob.cpp gpu/shadps4/video_core/cache_blob.cpp -o out/cache-blob-test
+          out/cache-blob-test
+          g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread -Igpu/shadps4 tests/test_gpu_diagnostics.cpp -o out/gpu-diagnostics-test
+          out/gpu-diagnostics-test

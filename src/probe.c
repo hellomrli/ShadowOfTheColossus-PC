@@ -20,6 +20,7 @@
 #include <tlhelp32.h>
 #include <wchar.h>
 #include <mmsystem.h>
+#include "win_unwind.h"
 #else
 #include <sys/mman.h>
 #include <malloc.h>
@@ -634,6 +635,39 @@ static void minidump_write_now(EXCEPTION_POINTERS *info) {
     CloseHandle(file);
     fprintf(stderr,ok ? "Crash dump: %s\n" : "Crash dump failed: %s\n",path);
 }
+/* sotc: a corrupted diagnostic scope must not suppress the original crash dump. */
+static void dump_gpu_crash_context(void) {
+    sigjmp_buf recovery;
+    sigjmp_buf *previous = runtime_fault_recover;
+    if (sigsetjmp(recovery, 0)) {
+        fprintf(stderr, "GPU context: stopped after a fault (original dump follows)\n");
+    } else {
+        runtime_fault_recover = &recovery;
+        bbgpu_dump_diagnostic_context();
+    }
+    runtime_fault_recover = previous;
+}
+/* sotc: driver DLLs omit RBP. Walk the exception snapshot using native unwind tables, not
+ * the crash-handler stack; a nested bad unwind must not prevent the original minidump. */
+static void dump_native_crash_stack(const CONTEXT *initial) {
+    CONTEXT stack = *initial;
+    sigjmp_buf recovery;
+    sigjmp_buf *previous = runtime_fault_recover;
+    volatile unsigned depth = 0;
+    if (sigsetjmp(recovery, 0)) {
+        fprintf(stderr, "  native unwind stopped after a fault (original dump follows)\n");
+    } else {
+        runtime_fault_recover = &recovery;
+        fprintf(stderr, "Native stack (Windows unwind tables):\n");
+        for (; depth < 48; ++depth) {
+            char where[MAX_PATH + 64];
+            describe_address(where, sizeof(where), (uintptr_t)stack.Rip);
+            fprintf(stderr, "  native #%u %s\n", depth, where);
+            if (!sotc_win_unwind_step(&stack)) break;
+        }
+    }
+    runtime_fault_recover = previous;
+}
 static int fatal_reported;
 static LONG fatal_exception(EXCEPTION_POINTERS *info) {
     if (__atomic_exchange_n(&fatal_reported,1,__ATOMIC_ACQ_REL)) { Sleep(INFINITE); }
@@ -667,8 +701,13 @@ static LONG fatal_exception(EXCEPTION_POINTERS *info) {
             c->Rax,c->Rbx,c->Rcx,c->Rdx,c->Rsi,c->Rdi,c->Rbp,c->Rsp);
     fprintf(stderr,"  r8=%016llx r9=%016llx r10=%016llx r11=%016llx\n  r12=%016llx r13=%016llx r14=%016llx r15=%016llx\n",
             c->R8,c->R9,c->R10,c->R11,c->R12,c->R13,c->R14,c->R15);
-    if (gpu_enabled) bbgpu_dump_guest_writes(info);
-    /* rbp chain (guest and host code keep frame pointers). */
+    if (gpu_enabled) {
+        dump_gpu_crash_context();
+        bbgpu_dump_guest_writes(info);
+    }
+    dump_native_crash_stack(c);
+    /* Frame-pointer chain remains useful for guest code without Windows unwind metadata. */
+    fprintf(stderr, "Frame-pointer stack (guest/host frames with RBP):\n");
     uintptr_t rbp=(uintptr_t)c->Rbp;
     for (int depth=0; depth<24 && rbp; ++depth) {
         uintptr_t frame[2];

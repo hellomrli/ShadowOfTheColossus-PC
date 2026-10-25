@@ -11,6 +11,7 @@
 #include "shader_recompiler/info.h"
 #include "video_core/sotc_stats.h"
 #include "video_core/cache_storage.h"
+#include "video_core/gpu_diagnostics.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
@@ -377,6 +378,9 @@ bool PipelineCache::LoadPipelineStage(Serialization::Archive& ar, size_t stage) 
     if (!LoadShaderMeta(ar, program->info, spec, perm_idx)) {
         return false;
     }
+    // sotc: keep the shader identity available while a cached module enters the driver.
+    const SotcGpuDiagnostics::Scope diagnostic{
+        "cached shader", program->info.pgm_hash, perm_idx, static_cast<int>(program->info.hw_stage)};
 
     std::vector<u32> spv{};
     {

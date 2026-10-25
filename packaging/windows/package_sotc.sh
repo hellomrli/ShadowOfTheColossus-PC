@@ -86,6 +86,8 @@ cp scripts/prepare.py scripts/link_libc.py scripts/link_modules.py scripts/conte
    scripts/sotc_cpu.py scripts/sotc_modes.py "$dest/scripts/"
 cp sotc.py SotC.bat LICENSE CHANGELOG.md "$dest/"
 cp docs/sotc/README-SotC.md "$dest/README.md"
+mkdir -p "$dest/docs/sotc"
+cp docs/sotc/CRASH-NVIDIA-2026-10-25.md "$dest/docs/sotc/"
 cat > "$dest/sotc.ini" <<'EOF'
 # Shadow of the Colossus PC - settings (see README.md)
 # Folder of your game dump (the one with eboot.bin):
@@ -110,7 +112,7 @@ rm -rf dist/SotC-PC.zip
 python -c 'import shutil, sys; shutil.make_archive("dist/SotC-PC", "zip", "out/stage", "SotC-PC")'
 # The playable copy keeps its settings and saves.
 mkdir -p dist/SotC-PC
-cp -r "$dest/bin" "$dest/scripts" "$dest/launcher" "$dest/_internal" dist/SotC-PC/
+cp -r "$dest/bin" "$dest/scripts" "$dest/launcher" "$dest/_internal" "$dest/docs" dist/SotC-PC/
 cp "$dest/SotC.exe" "$dest/sotc.py" "$dest/SotC.bat" "$dest/README.md" "$dest/LICENSE" "$dest/CHANGELOG.md" dist/SotC-PC/
 [[ -f dist/SotC-PC/sotc.ini ]] || cp "$dest/sotc.ini" dist/SotC-PC/
 echo "dist/SotC-PC.zip ($(du -h dist/SotC-PC.zip | cut -f1)) and dist/SotC-PC/"

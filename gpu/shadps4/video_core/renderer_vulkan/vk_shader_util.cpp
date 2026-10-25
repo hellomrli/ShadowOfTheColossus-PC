@@ -2,11 +2,14 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "common/assert.h"
+#include "video_core/gpu_diagnostics.h"
 #include "video_core/renderer_vulkan/vk_shader_util.h"
 
 namespace Vulkan {
 
 vk::ShaderModule CompileSPV(std::span<const u32> code, vk::Device device) {
+    // sotc: retain the active driver operation for the loader's fatal report.
+    const SotcGpuDiagnostics::Scope diagnostic{"vkCreateShaderModule"};
     const vk::ShaderModuleCreateInfo shader_info = {
         .codeSize = code.size() * sizeof(u32),
         .pCode = code.data(),

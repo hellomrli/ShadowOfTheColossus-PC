@@ -66,6 +66,9 @@ Tudo isto está no lançador, na página **Imagem e FPS** (e os principais em **
   experimentar.
 
 Os modos de patch só valem para a versão EU 1.01; em outra versão eles não são aplicados.
+Desde a 0.64 o código do executável também precisa ser verificado antes dos patches de CPU
+com offsets fixos. O nome da pasta e a versão no `param.sfo` não provam compatibilidade; não
+renomeie o dump nem altere os metadados para forçar os patches.
 
 ## Controles
 
@@ -134,11 +137,31 @@ normal o jogo roda travado em 30 FPS, como no PS4.
 
 ## Diagnóstico
 
+### Queda no driver NVIDIA ao iniciar (RTX 3070)
+
+Os relatos de 2026-10-25 caem em `nvoglv64.dll+0xe35140`, inclusive com a geração de quadros
+desligada. Ambas as sessões ainda dizem `SOTC DLSS: ready`. A 0.64 melhora a segurança e o
+relatório de falha, mas **a causa dessa queda ainda não foi confirmada**.
+
+1. Mantenha **Geração de quadros: Desligada**. Em **Avançado → Variáveis extras**, acrescente
+   `SOTC_DLSS=0`, feche e abra o jogo. `SOTC DLSS: ready` não deve aparecer nessa sessão.
+   Escolher FSR 1 no menu, sozinho, não impede a inicialização do NGX.
+2. Faça outro teste separado, mudando só `SOTC_RECORD_THREAD=0`. Registre se manteve ou retirou
+   `SOTC_DLSS=0`; não troque driver, resolução, cache e outras opções ao mesmo tempo.
+3. Envie `user/last_run.log` e o `.dmp` correspondente em `user/crashes/`. Na 0.64 procure
+   `GPU context` e `Native stack (Windows unwind tables)` no log. Um contexto ausente também
+   é informação útil; nem todo caminho do driver está instrumentado.
+
+Preserve os dumps anteriores e um backup de `user/` e `sotc.ini` ao trocar de pacote. Não é
+necessário enviar arquivos do jogo ou firmware. A investigação está documentada no repositório
+em `docs/sotc/CRASH-NVIDIA-2026-10-25.md`.
+
 Estas variáveis de ambiente ajudam a investigar problemas:
 
 | Variável | Efeito |
 |---|---|
 | `SOTC_FPS=1` | taxa de quadros a cada 5 s |
+| `SOTC_DLSS=0` | desliga a ponte DLSS/NGX durante toda a sessão (exige reinício; diferente de selecionar FSR 1) |
 | `BB_FAULT_RING=arquivo` | grava as últimas exceções (sobrevive a quedas) |
 | `BB_STACKS_TRIGGER=arquivo` | criar o arquivo despeja as pilhas das threads |
 | `BB_READBACKS=0/1/2` | leituras da GPU; o padrão 2 é o exigido pelo jogo |

@@ -9,6 +9,7 @@
 #include "core/libraries/kernel/process.h"
 
 #include "video_core/cache_storage.h"
+#include "video_core/cache_blob.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
 
@@ -157,12 +158,8 @@ void DataBase::Prefetch() {
             workers.emplace_back([&, t] {
                 using namespace Common::FS;
                 for (size_t i = next++; i < files.size(); i = next++) {
-                    const IOFile file{files[i], FileAccessMode::Read};
-                    if (!file.IsOpen()) {
-                        continue;
-                    }
-                    std::vector<u8> data(file.GetSize());
-                    if (file.Read(data) != data.size()) {
+                    std::vector<u8> data;
+                    if (!Blob::ReadFile(files[i], data)) {
                         continue;
                     }
                     results[t].emplace_back(files[i].filename().string(), std::move(data));
@@ -262,20 +259,9 @@ bool WriteVector(const BlobType type, std::filesystem::path&& path_, std::vector
                     LOG_ERROR(Render, "Failed to add {} to the archive", path.string().c_str());
                 }
             } else {
-                using namespace Common::FS;
-                // sotc: written whole or not at all. The game process is often ended (launcher
-                // Stop, a crash) while blobs are being written, and a truncated blob from the
-                // last session is read back at the next start.
-                auto temporary = path;
-                temporary += ".tmp";
-                {
-                    const auto file = IOFile{temporary, FileAccessMode::Create};
-                    file.Write(v);
-                }
-                std::error_code error;
-                std::filesystem::rename(temporary, path, error);
-                if (error) {
-                    std::filesystem::remove(temporary, error);
+                // sotc: disk-full/short writes must not publish a partial blob for next boot.
+                if (!Blob::WriteFile(path, std::as_bytes(std::span{v}))) {
+                    LOG_WARNING(Render, "Failed to write cache blob {}", path.string());
                 }
             }
         }};
@@ -291,23 +277,30 @@ bool WriteVector(const BlobType type, std::filesystem::path&& path_, std::vector
 
 template <typename T>
 void LoadVector(BlobType type, std::filesystem::path& path, std::vector<T>& v) {
-    using namespace Common::FS;
+    // sotc: every failure is a cache miss, never a partial vector passed to Vulkan/serdes.
+    v.clear();
     path.replace_extension(GetBlobFileExtension(type));
     if (EmulatorSettings.IsPipelineCacheArchived()) {
         int index{-1};
         index = mz_zip_reader_locate_file(&zip_ar, path.string().c_str(), nullptr, 0);
         if (index < 0) {
-            LOG_WARNING(Render, "File {} is not found in the archive", path.string().c_str());
             return;
         }
         mz_zip_archive_file_stat stat{};
-        mz_zip_reader_file_stat(&zip_ar, index, &stat);
-        v.resize(stat.m_uncomp_size / sizeof(T));
-        mz_zip_reader_extract_to_mem(&zip_ar, index, v.data(), stat.m_uncomp_size, 0);
+        if (!mz_zip_reader_file_stat(&zip_ar, index, &stat) ||
+            !Blob::Read(v, stat.m_uncomp_size, [&](std::span<std::byte> data) {
+                return mz_zip_reader_extract_to_mem(&zip_ar, index, data.data(), data.size(), 0);
+            })) {
+            LOG_WARNING(Render, "Invalid or incomplete archived cache blob {}", path.string());
+        }
     } else {
-        const auto file = IOFile{path, FileAccessMode::Read};
-        v.resize(file.GetSize() / sizeof(T));
-        file.Read(v);
+        if (!Blob::ReadFile(path, v)) {
+            std::error_code error;
+            // Missing .spv files on a cold cache are normal, not filesystem errors.
+            if (std::filesystem::exists(path, error) || error) {
+                LOG_WARNING(Render, "Invalid or unreadable cache blob {}", path.string());
+            }
+        }
     }
 }
 
@@ -332,6 +325,8 @@ bool DataBase::Save(BlobType type, const std::string& name, std::vector<u32>&& d
 }
 
 void DataBase::Load(BlobType type, const std::string& name, std::vector<u8>& data) {
+    // sotc: never leave stale output after a cache miss or a closed database.
+    data.clear();
     if (!opened) {
         return;
     }
@@ -347,6 +342,7 @@ void DataBase::Load(BlobType type, const std::string& name, std::vector<u8>& dat
 }
 
 void DataBase::Load(BlobType type, const std::string& name, std::vector<u32>& data) {
+    data.clear();
     if (!opened) {
         return;
     }
@@ -357,13 +353,19 @@ void DataBase::Load(BlobType type, const std::string& name, std::vector<u32>& da
         path.replace_extension(GetBlobFileExtension(type));
         std::vector<u8> bytes;
         TakePrefetched(path, bytes);
-        data.resize(bytes.size() / sizeof(u32));
-        if (!data.empty()) {
-            std::memcpy(data.data(), bytes.data(), data.size() * sizeof(u32));
-        }
-        return;
+        // sotc: use the same word-alignment validation as loose and archived reads.
+        Blob::Read(data, bytes.size(), [&](std::span<std::byte> target) {
+            std::memcpy(target.data(), bytes.data(), bytes.size());
+            return true;
+        });
+    } else {
+        LoadVector(type, path, data);
     }
-    return LoadVector(type, path, data);
+    // sotc: even a word-aligned short write may end halfway through a SPIR-V instruction.
+    if (type == BlobType::ShaderBinary && !data.empty() && !Blob::IsCompleteSpirv(data)) {
+        LOG_WARNING(Render, "Incomplete SPIR-V cache blob {}, rebuilding", path.string());
+        data.clear();
+    }
 }
 
 void DataBase::ForEachBlob(BlobType type, const std::function<void(std::vector<u8>&& data)>& func) {
@@ -376,10 +378,13 @@ void DataBase::ForEachBlob(BlobType type, const std::function<void(std::vector<u
             mz_zip_reader_get_filename(&zip_ar, index, file_name.data(), file_name.size());
             if (std::string{file_name.data()}.ends_with(ext)) {
                 mz_zip_archive_file_stat stat{};
-                mz_zip_reader_file_stat(&zip_ar, index, &stat);
-                std::vector<u8> data(stat.m_uncomp_size);
-                mz_zip_reader_extract_to_mem(&zip_ar, index, data.data(), data.size(), 0);
-                func(std::move(data));
+                std::vector<u8> data;
+                if (mz_zip_reader_file_stat(&zip_ar, index, &stat) &&
+                    Blob::Read(data, stat.m_uncomp_size, [&](std::span<std::byte> target) {
+                        return mz_zip_reader_extract_to_mem(&zip_ar, index, target.data(), target.size(), 0);
+                    })) {
+                    func(std::move(data));
+                }
             }
         }
     } else if (prefetch_active) {
@@ -391,11 +396,8 @@ void DataBase::ForEachBlob(BlobType type, const std::function<void(std::vector<u
     } else {
         for (const auto& file_name : std::filesystem::directory_iterator{cache_path}) {
             if (file_name.path().extension().string().ends_with(ext)) {
-                using namespace Common::FS;
-                const auto& file = IOFile{file_name, FileAccessMode::Read};
-                if (file.IsOpen()) {
-                    std::vector<u8> data(file.GetSize());
-                    file.Read(data);
+                std::vector<u8> data;
+                if (Blob::ReadFile(file_name.path(), data)) {
                     func(std::move(data));
                 }
             }
