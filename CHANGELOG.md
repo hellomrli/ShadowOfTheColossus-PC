@@ -18,6 +18,10 @@
 - **Pacote:** usa o `window_icon.ico` do repositorio quando nao ha o PNG local, evitando a falha
   de empacotamento num checkout limpo. Testes de regressao e smoke test do lancador congelado
   adicionados ao CI.
+- **DLLs do Windows:** o pacote agora percorre as dependencias indiretas do FFmpeg, SDL e demais
+  bibliotecas. O `ldd` anterior copiava apenas as diretas, impedindo abrir o jogo sem MSYS2 no PC.
+  Uma dependencia ausente interrompe o pacote; o CI inicia o loader com um `PATH` sem MSYS2.
+  As licencas dos pacotes CLANG64 acompanham os arquivos em `bin/licenses-msys2`.
 - **Canal de atualizacao:** consulta `hellomrli/ShadowOfTheColossus-PC`, nao o projeto upstream.
   O atualizador continua no canal estavel; pre-releases precisam de download manual. Guarde
   `user/` e o seu `sotc.ini` ao mudar de pasta.

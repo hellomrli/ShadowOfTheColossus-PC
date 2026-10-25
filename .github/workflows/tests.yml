@@ -43,6 +43,10 @@ jobs:
         if: runner.os == 'Windows'
         run: python -m unittest discover -s tests -p "test_launcher*.py" -v
 
+      - name: Native packaging regression tests (Windows)
+        if: runner.os == 'Windows'
+        run: python -m unittest discover -s tests -p test_windows_packaging.py -v
+
       - name: Standalone live-settings test (no GPU)
         if: runner.os == 'Linux'
         shell: bash

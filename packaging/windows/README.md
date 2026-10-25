@@ -35,6 +35,12 @@ The package freezes the launcher with PyInstaller (`WINPYTHON`: a Windows Python
 PyInstaller and Pillow) into `SotC.exe`, which also runs `sotc.py` (`--run`), the preparation
 scripts (`--script`) and the game without the window (`--play`): players need no Python.
 
+`collect_dlls.py` uses `llvm-objdump` to copy the complete native DLL dependency graph from
+CLANG64, including indirect FFmpeg/SDL imports. Missing non-system dependencies stop packaging;
+the CLANG64 license directory is shipped in `bin/licenses-msys2`. CI starts the packaged loader
+with only Windows system directories on `PATH`, so an installed toolchain cannot hide missing
+DLLs. This checks startup dependencies, not Vulkan rendering or gameplay.
+
 The icon (`launcher/sotc.ico`/`.png`) is drawn by `launcher/make_icon.py` and built into
 `SotC.exe`, `bb-probe.exe` (the game window) and `bb-gpu-capabilities.exe`.
 

@@ -39,10 +39,6 @@ fi
 for exe in bb-probe.exe bb-gpu-capabilities.exe; do
     llvm-strip --strip-debug -o "$dest/bin/$exe" "out/$exe"
 done
-# Every DLL the loader takes from the CLANG64 tree (SDL3, FFmpeg, Vulkan loader, ...).
-ldd "$dest/bin/bb-probe.exe" "$dest/bin/bb-gpu-capabilities.exe" | awk '/\/clang64\/bin\// {print $3}' | sort -u | while read -r dll; do
-    cp -u "$dll" "$dest/bin/"
-done
 # DLSS Frame Generation (RTX 40/50): the official NVIDIA Streamline runtime next to bb-probe.exe,
 # with NVIDIA's licenses (redistributable under the NVIDIA RTX SDKs license and Streamline's MIT
 # license). Not in git: STREAMLINE_DIR (default ../SotC-deps/streamline-2.14.16) holds the files
@@ -78,6 +74,12 @@ if [[ -f "$dlss_bridge" ]]; then
 else
     echo "DLSS: no sotc_dlss.dll in $dlss_bridge (build gpu/dlss_bridge); DLSS off" >&2
 fi
+# ldd only reported direct imports here, leaving FFmpeg/SDL dependencies behind. Walk every
+# copied DLL's PE imports as well, and fail rather than shipping an unresolved dependency.
+"$python" packaging/windows/collect_dlls.py "$(cygpath -w "$dest/bin")" \
+    "$(cygpath -w "$MSYS2_ROOT/clang64/bin")" \
+    --objdump "$(cygpath -w "$(command -v llvm-objdump)")"
+cp -r "$MSYS2_ROOT/clang64/share/licenses" "$dest/bin/licenses-msys2"
 cp scripts/prepare.py scripts/link_libc.py scripts/link_modules.py scripts/content_profile.py \
    scripts/sotc_cpu.py scripts/sotc_modes.py "$dest/scripts/"
 cp sotc.py SotC.bat LICENSE CHANGELOG.md "$dest/"

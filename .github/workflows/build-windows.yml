@@ -116,18 +116,41 @@ jobs:
         shell: python
         run: |
           import json
+          import os
           from pathlib import Path
           import subprocess
 
+          system = Path(os.environ["SystemRoot"])
+          env = {**os.environ, "PATH": os.pathsep.join(map(str, (system / "System32", system)))}
           report = Path("out/package-smoke.json").resolve()
           report.unlink(missing_ok=True)
           subprocess.run([
               str(Path("dist/SotC-PC/SotC.exe").resolve()), "--script",
               str(Path("packaging/windows/smoke_launcher.py").resolve()), str(report),
-          ], check=True, timeout=60)
+          ], check=True, timeout=60, env=env)
           result = json.loads(report.read_text(encoding="utf-8"))
           assert result["status"] == "ok", result
           print(result)
+
+      - name: Smoke test the native loader (no MSYS2 or GPU)
+        shell: python
+        run: |
+          import ctypes
+          import os
+          from pathlib import Path
+          import subprocess
+          import tempfile
+
+          # Missing DLLs must fail, not open a Windows error dialog on the unattended runner.
+          ctypes.windll.kernel32.SetErrorMode(0x0001 | 0x0002)
+          system = Path(os.environ["SystemRoot"])
+          env = {**os.environ, "PATH": os.pathsep.join(map(str, (system / "System32", system)))}
+          exe = Path("dist/SotC-PC/bin/bb-probe.exe").resolve()
+          with tempfile.TemporaryDirectory() as cwd:
+              result = subprocess.run([str(exe)], cwd=cwd, env=env, capture_output=True, timeout=30)
+          output = (result.stdout + result.stderr).decode("utf-8", errors="replace")
+          print(output)
+          assert result.returncode == 1 and "Usage:" in output, (hex(result.returncode), output)
 
       - name: Upload the package
         uses: actions/upload-artifact@v4
