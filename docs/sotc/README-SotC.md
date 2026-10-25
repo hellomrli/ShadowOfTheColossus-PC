@@ -7,6 +7,10 @@ shadPS4 SotC. A base é o [bloodborne_pc](https://github.com/Supermedo/bloodborn
 
 Este pacote **não contém o jogo nem firmware da Sony**. Você precisa ter os seus.
 
+**0.65 (pre-release):** corrige o envio de comandos ao DLSS com gravação em thread.
+O teste com DLSS na RTX 3070 afetada ainda está pendente; selecionar FSR 1 é o contorno
+confirmado pelo jogador. Previews são baixadas manualmente, sem mudar o canal estável.
+
 ## Requisitos
 
 - Windows 10/11 64-bit e GPU com Vulkan 1.3.
@@ -46,7 +50,8 @@ Tudo isto está no lançador, na página **Imagem e FPS** (e os principais em **
   ampliada para a saída com **FSR 1** + nitidez (RCAS) ou bilinear. A janela nunca passa de 90%
   da tela; a tela cheia usa o monitor inteiro.
 - **DLSS (RTX 20+):** o pacote inclui `sotc_dlss.dll` (ponte MIT do projeto) e o
-  `nvngx_dlss.dll` da NVIDIA. Numa placa RTX o DLSS substitui o FSR 1 sozinho: **DLAA** quando o
+  `nvngx_dlss.dll` da NVIDIA. Selecione **DLSS / FSR 1 / Bilinear** nas configurações rápidas
+  do lançador ou no F1; a escolha fica salva. Com DLSS selecionado numa RTX, usa **DLAA** quando o
   jogo desenha na mesma resolução da saída, **Super Resolution** quando desenha abaixo dela (por
   exemplo `SOTC_RENDER_RES=1280x720` com `SOTC_OUTPUT_RES=1920x1080`). `SOTC_DLSS=0` desliga.
   Saída HDR e quadros sem G-buffer continuam no FSR 1. O HUD faz parte da imagem ampliada.
@@ -139,22 +144,30 @@ normal o jogo roda travado em 30 FPS, como no PS4.
 
 ### Queda no driver NVIDIA ao iniciar (RTX 3070)
 
-Os relatos de 2026-10-25 caem em `nvoglv64.dll+0xe35140`, inclusive com a geração de quadros
-desligada. Ambas as sessões ainda dizem `SOTC DLSS: ready`. A 0.64 melhora a segurança e o
-relatório de falha, mas **a causa dessa queda ainda não foi confirmada**.
+Os relatos de 2026-10-25 caem em `nvoglv64.dll+0xe35140`, inclusive com geração de quadros
+desligada. A pilha nativa da 0.64 passa pela criação de uma feature NGX. O jogador confirmou
+que selecionar FSR 1 evita a queda: cerca de dez minutos, saída com código 0. Essa sessão
+ocorreu antes da correção e não valida DLSS na 0.65.
 
-1. Mantenha **Geração de quadros: Desligada**. Em **Avançado → Variáveis extras**, acrescente
-   `SOTC_DLSS=0`, feche e abra o jogo. `SOTC DLSS: ready` não deve aparecer nessa sessão.
-   Escolher FSR 1 no menu, sozinho, não impede a inicialização do NGX.
-2. Faça outro teste separado, mudando só `SOTC_RECORD_THREAD=0`. Registre se manteve ou retirou
-   `SOTC_DLSS=0`; não troque driver, resolução, cache e outras opções ao mesmo tempo.
-3. Envie `user/last_run.log` e o `.dmp` correspondente em `user/crashes/`. Na 0.64 procure
-   `GPU context` e `Native stack (Windows unwind tables)` no log. Um contexto ausente também
-   é informação útil; nem todo caminho do driver está instrumentado.
+A 0.65 corrige um handle interno inválido entregue a NGX: criação e avaliação agora rodam
+na ordem correta, na thread proprietária do comando Vulkan real. **A confirmação de que isso
+elimina a queda com DLSS ainda depende do PC afetado.**
+
+1. Para continuar jogando sem testar DLSS, mantenha **FSR 1**, o contorno observado nesse PC.
+2. Para testar a 0.65, selecione **DLSS** e mantenha **Geração de quadros: Desligada**.
+   Retire `SOTC_DLSS=0`, se presente, sem trocar driver, resolução, cache e outras opções.
+   `SOTC DLSS: ready` indica apenas inicialização, inclusive com FSR 1 selecionado. Procure
+   `creating ... (real command buffer)` e depois `SOTC DLSS: DLSS ...` para confirmar criação.
+3. Se cair, preserve `user/last_run.log` e o `.dmp` da mesma sessão em `user/crashes/`.
+   Procure `GPU context`, `NGX DLSS CreateFeature` / `NGX DLSS Evaluate` e
+   `Native stack (Windows unwind tables)`. Nem todo caminho do driver está instrumentado.
+4. Em testes separados, compare FSR 1 e `SOTC_RECORD_THREAD=0` com DLSS selecionado.
+   `SOTC_DLSS=0` em **Avançado → Variáveis extras** é um controle mais forte: após reiniciar,
+   impede até a inicialização NGX e remove `ready`. Registre cada configuração testada.
 
 Preserve os dumps anteriores e um backup de `user/` e `sotc.ini` ao trocar de pacote. Não é
-necessário enviar arquivos do jogo ou firmware. A investigação está documentada no repositório
-em `docs/sotc/CRASH-NVIDIA-2026-10-25.md`.
+necessário enviar arquivos do jogo ou firmware. A investigação e o funcionamento do DLSS
+estão em `docs/sotc/CRASH-NVIDIA-2026-10-25.md` e `docs/sotc/DLSS.md`, incluídos no pacote.
 
 Estas variáveis de ambiente ajudam a investigar problemas:
 

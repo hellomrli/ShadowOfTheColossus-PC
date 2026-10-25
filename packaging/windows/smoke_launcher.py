@@ -15,7 +15,8 @@ def main():
     port = Path(sys.executable).resolve().parent
     for name in ('SotC.exe', 'bin/bb-probe.exe', 'bin/bb-gpu-capabilities.exe',
                  'bin/sotc_dlss.dll', 'bin/nvngx_dlss.dll', 'bin/licenses-nvidia/LICENSE.txt',
-                 'sotc.py', 'scripts/prepare.py', 'launcher/window_icon.ico'):
+                 'sotc.py', 'scripts/prepare.py', 'launcher/window_icon.ico',
+                 'docs/sotc/CRASH-NVIDIA-2026-10-25.md', 'docs/sotc/DLSS.md'):
         assert (port / name).is_file(), f'package missing {name}'
     assert sotc_update.RELEASES_URL == (
         'https://api.github.com/repos/hellomrli/ShadowOfTheColossus-PC/releases/latest')
