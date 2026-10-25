@@ -7,7 +7,9 @@
 set -euo pipefail
 cd -- "$(dirname -- "$0")/../.."
 export MSYS2_ROOT=${MSYS2_ROOT:-/i/msys64}
-export PATH="$MSYS2_ROOT/clang64/bin:$MSYS2_ROOT/usr/bin:$PATH"
+# setup-msys2 uses / as its root; //clang64 would be interpreted as a UNC network path.
+clang64="${MSYS2_ROOT%/}/clang64"
+export PATH="$clang64/bin:${MSYS2_ROOT%/}/usr/bin:$PATH"
 [[ -f out/bb-probe.exe && -f out/bb-gpu-capabilities.exe ]] || { echo 'Build first: bash build.sh' >&2; exit 1; }
 python=${WINPYTHON:-/c/PyBuild312/python.exe}
 "$python" -m PyInstaller --version >/dev/null || { echo "Need PyInstaller in $python (WINPYTHON)" >&2; exit 1; }
@@ -77,9 +79,9 @@ fi
 # ldd only reported direct imports here, leaving FFmpeg/SDL dependencies behind. Walk every
 # copied DLL's PE imports as well, and fail rather than shipping an unresolved dependency.
 "$python" packaging/windows/collect_dlls.py "$(cygpath -w "$dest/bin")" \
-    "$(cygpath -w "$MSYS2_ROOT/clang64/bin")" \
+    "$(cygpath -w "$clang64/bin")" \
     --objdump "$(cygpath -w "$(command -v llvm-objdump)")"
-cp -r "$MSYS2_ROOT/clang64/share/licenses" "$dest/bin/licenses-msys2"
+cp -r "$clang64/share/licenses" "$dest/bin/licenses-msys2"
 cp scripts/prepare.py scripts/link_libc.py scripts/link_modules.py scripts/content_profile.py \
    scripts/sotc_cpu.py scripts/sotc_modes.py "$dest/scripts/"
 cp sotc.py SotC.bat LICENSE CHANGELOG.md "$dest/"
