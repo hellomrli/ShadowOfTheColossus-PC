@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "bbport_overlay.h"
+#include "overlay_frame_state.h"
 
 #include <atomic>
 #include <cfloat>
@@ -72,15 +73,15 @@ namespace BbOverlay {
 namespace {
 
 std::mutex imgui_mutex; // the ImGui context: window thread (input) and present thread
-bool initialized = false;
+std::atomic<bool> initialized{false};
 std::atomic<bool> menu_open{false};
 bool l3_down = false, r3_down = false;
 bool dirty = false; // settings changed while open: saved on close
 // The game's text dialog (SetTextEntry), guarded by imgui_mutex.
-bool text_entry_active = false;
+std::atomic<bool> text_entry_active{false};
 std::string text_entry_prompt, text_entry_text;
 // The game's save/load slot list (OpenSaveList), guarded by imgui_mutex.
-bool list_active = false;
+std::atomic<bool> list_active{false};
 std::string list_title;
 std::vector<std::string> list_items;
 // sotc: each save's picture (icon0.png of its sce_sys), shown to the left of its text as in the
@@ -1386,7 +1387,26 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent,
         toast_text = uncapped ? SotcUi::T("FPS livres", "FPS uncapped") : SotcUi::T("FPS travados em 30", "FPS capped at 30");
         toast_until_ms.store(NowMs() + 2500, std::memory_order_relaxed);
     }
-    if (!Visible()) {
+    if (!initialized) {
+        return;
+    }
+    // sotc: record dismissal before the no-draw fast path, not at the next F7/F8 toast.
+    static FrameState frame_state;
+    const auto state = frame_state.Update(
+        LoadingShown() && !list_active && !text_entry_active,
+        menu_open || text_entry_active || list_active || OverlayOn() || ToastShown() || TriggerPending(),
+        NowMs());
+    if (state.change == FrameState::Change::LoadingShown) {
+        std::fprintf(stderr, "SOTC loading screen: shown\n");
+        SotcEvent::Log("GAME", "%s", SotcUi::T("Tela de carregamento (o jogo parou de mostrar quadros)",
+                                               "Loading screen (the game stopped showing frames)"));
+    } else if (state.change == FrameState::Change::LoadingHidden) {
+        const double seconds = double(state.duration_ms) / 1000.0;
+        std::fprintf(stderr, "SOTC loading screen: hidden after %.1f s\n", seconds);
+        SotcEvent::Log("GAME", SotcUi::T("Fim da tela de carregamento (%.1f s)",
+                                       "Loading screen over (%.1f s)"), seconds);
+    }
+    if (!state.draw) {
         return;
     }
     std::scoped_lock lock{imgui_mutex};
@@ -1404,24 +1424,7 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent,
 
     ImGui_ImplVulkan_NewFrame();
     ImGui::NewFrame();
-    const bool loading = LoadingShown() && !list_active && !text_entry_active;
-    static bool was_loading = false;
-    static long long loading_since = 0;
-    if (loading != was_loading) { // sotc: one log line when it appears and when it goes away
-        was_loading = loading;
-        if (loading) {
-            loading_since = NowMs();
-            std::fprintf(stderr, "SOTC loading screen: shown\n");
-            SotcEvent::Log("GAME", "%s", SotcUi::T("Tela de carregamento (o jogo parou de mostrar quadros)",
-                                                   "Loading screen (the game stopped showing frames)"));
-        } else {
-            std::fprintf(stderr, "SOTC loading screen: hidden after %.1f s\n",
-                         double(NowMs() - loading_since) / 1000.0);
-            SotcEvent::Log("GAME", SotcUi::T("Fim da tela de carregamento (%.1f s)", "Loading screen over (%.1f s)"),
-                           double(NowMs() - loading_since) / 1000.0);
-        }
-    }
-    if (loading) {
+    if (state.loading) {
         LoadingScreen();
     }
     // sotc: SOTC_MENU_TRIGGER=<file>: when the file appears it is removed and the menu opens or

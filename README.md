@@ -1,17 +1,17 @@
-# Shadow of the Colossus — PC native port · v0.65 (preview)
+# Shadow of the Colossus — PC native port · v0.66 (preview)
 
 [Releases](../../releases) · [Changelog](CHANGELOG.md)
 
-**v0.65 is a prerelease of this fork.** It fixes an invalid command-buffer handoff to DLSS:
-NGX creation/evaluation now run in order on the recording thread with real Vulkan handles.
-The new RTX 3070 stack reaches NGX feature creation; whether this fixes that startup crash
-still needs testing on the affected PC. Windows/RTX gameplay and image quality remain unverified here. Download previews
+**v0.66 is a prerelease of this fork, focused on stability and CPU efficiency.** It parks the
+idle command recorder on notifications, fixes its final-chunk leak and delayed loading-screen
+logs, and reports real process/thread CPU time once a minute. The user's 0.65 RTX 3070 run
+created DLSS successfully and exited normally; 0.66 gameplay and performance still need testing. Download previews
 manually from Releases: the launcher's updater follows this fork's stable releases, not previews
 or upstream releases. Keep a backup of `user/` and `sotc.ini` when moving to a new directory.
 
-**A v0.65 e uma pre-release deste fork.** Corrige a entrega de um handle interno ao NGX,
-com criacao/avaliacao DLSS na thread do comando real. O jogador confirmou que FSR 1 evita
-a queda relatada; o teste da correcao com DLSS na RTX 3070 ainda esta pendente.
+**A v0.66 e uma pre-release deste fork, com foco em estabilidade e CPU.** Corrige polling
+ocioso, liberacao da fila e registro de carregamento; mede o uso real das threads.
+E a primeira etapa, nao uma garantia de estabilidade de todo o jogo. [Plano e verificacao](docs/sotc/STABILITY-CPU-2026-10-25.md).
 
 > **No game or Sony files are included.** You need your own game dump and, for sound, two
 > modules from your own console. This project is not affiliated with Sony Interactive
@@ -31,7 +31,8 @@ game needs, in the style of [bloodborne_pc](https://github.com/Supermedo/bloodbo
 
 | Version | Improvements and fixes |
 |---|---|
-| **0.65 (preview)** | **Real Vulkan command buffers for DLSS**, with ordered creation/evaluation on the recording thread and synchronous fallback results; NGX crash-context labels, balanced debug labels on failure and a no-GPU regression using the production recorder. RTX 3070 validation remains pending; no renderer-default or shader-cache changes. |
+| **0.66 (preview)** | **Event-driven idle recorder**, chunk-boundary wakeup and final-chunk cleanup; **actual process/thread CPU telemetry**, immediate loading-dismissal logs and atomic dialog flags. No-GPU wakeup, lifetime and UI-state tests. Stability/CPU first; no new DLSS features or shader-cache changes. |
+| **0.65 (preview)** | **Real Vulkan command buffers for DLSS**, with ordered creation/evaluation on the recording thread and synchronous fallback results; NGX crash-context labels, balanced debug labels on failure and a no-GPU regression using the production recorder. A later RTX 3070 run created DLAA and exited normally; no renderer-default or shader-cache changes. |
 | **0.64 (preview)** | **Verify the actual executable before fixed-address CPU patches**, including update selection in the launcher; reject malformed/truncated cache blobs and publish only complete writes; **native Windows crash stacks and active Vulkan operation/shader context**. RTX 3070 driver-crash investigation remains open; no shader-output or renderer-default changes. |
 | **0.63 (preview)** | **Safer self-updates** with protected saves/settings and retained recovery backups; persistent **DLSS / FSR 1 / Bilinear** selection in both menus, corrected DLSS sharpening and history reset; reliable preparation cache/update overlays; **complete DLL dependencies for PCs without MSYS2**, clean-checkout packaging and Linux/Windows regression checks. |
 | **0.62 (preview)** | **DLSS in the F1 menu**, ten upstream shader/recompiler fixes, and NGX shutdown before Vulkan device destruction. Shader cache version 38: upgrading from 0.61 rebuilds the cache on first start. |
@@ -127,11 +128,11 @@ In the launcher (**Quick settings → Textures**) and in the in-game menu (chang
 
 - **RTX 3070 startup crash in `nvoglv64.dll+0xe35140`:** reported both with FSR 3 and with frame
   generation off. The 0.64 native stack identifies NGX feature creation. 0.65 fixes an internal
-  placeholder command buffer escaping into NGX. **FSR 1 is a confirmed workaround on the
-  reporting PC** (about ten minutes, exit code 0); this predates the fix and does not validate
-  DLSS. To test 0.65, select DLSS with frame generation off, keeping other settings unchanged.
-  If it persists, compare `SOTC_RECORD_THREAD=0` separately and send the new log and matching
-  dump. `SOTC_DLSS=0` in **Advanced → Extra variables** disables even NGX initialization;
+  placeholder command buffer escaping into NGX. The affected user subsequently reported
+  successful 1080p DLAA creation and about 7.5 minutes with FSR 3, exit code 0. This is a
+  successful startup sample, not full-game or image-quality validation. FSR 1 is also a
+  confirmed workaround; the current focus is stability/CPU rather than new DLSS work.
+  `SOTC_DLSS=0` in **Advanced → Extra variables** disables even NGX initialization;
   FSR 1 selection skips SR but still allows initialization. [Investigation and patch safety](docs/sotc/CRASH-NVIDIA-2026-10-25.md).
 - The first start after updating rebuilds the shaders: the first load is slow and stutters.
 - **Texture quality "Maximum"** can close the game in very wide views (sword raised against the
@@ -221,6 +222,9 @@ tests on both build paths. The Windows build also tests native unwinding with fr
 omitted. The production command recorder runs against a mock driver on Linux and Windows to
 check the external-SDK handoff without a GPU or NGX. The patch-guard tests use small synthetic
 executables, not game or firmware files.
+Recorder tests also check event-driven wakeups and idle shutdown; separate tests cover
+loading-state transitions and real OS CPU clocks/thread lifetime. See the
+[stability/CPU verification guide](docs/sotc/STABILITY-CPU-2026-10-25.md).
 Current native-test gaps and Windows verification steps are recorded in the
 [review notes](docs/sotc/REVIEW-2026-10-25.md).
 

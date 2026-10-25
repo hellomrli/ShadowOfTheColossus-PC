@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // sotc: taken from Pink-shadPS4 0.4.0 (luizgustavs), cp_record_thread; scheduler hooks in vk_scheduler.cpp.
 
+#include <algorithm>
 #include <bit>
 #include <chrono>
 #include <cstdlib>
@@ -18,6 +19,7 @@
 #include "common/perf_stats.h"
 #include "common/thread.h"
 #include "video_core/gpu_diagnostics.h"
+#include "video_core/host_cpu_usage.h"
 #include "video_core/renderer_vulkan/vk_recorder.h"
 
 #if defined(_M_X64) || defined(__x86_64__)
@@ -691,8 +693,6 @@ CommandRecorder::~CommandRecorder() {
     for (Chunk* chunk : free_chunks) {
         delete chunk;
     }
-    // The chunks still linked after the consumer position contain no remaining commands to run and
-    // can be released during cleanup
 }
 
 vk::CommandBuffer CommandRecorder::NewFakeHandle() {
@@ -801,7 +801,8 @@ void CommandRecorder::NextChunk() {
     end->kind = BlockKind::End;
     end->invoke = nullptr;
     write_pos += sizeof(BlockHeader);
-    write_chunk->committed.store(write_pos, std::memory_order_release);
+    // sotc: crossing a chunk publishes work too, even without a full batch or a Kick.
+    PublishAll();
     write_chunk = next;
     write_pos = 0;
 }
@@ -885,6 +886,7 @@ void CommandRecorder::Sync() {
 
 void CommandRecorder::ConsumerLoop(std::stop_token stoken) {
     Common::SetCurrentThreadName("shadPS4:GpuRecorder");
+    const SotcCpu::ThreadScope cpu_scope{SotcCpu::Role::Recorder};
     Common::SetCurrentThreadPriority(Common::ThreadPriority::High);
     using Clock = std::chrono::steady_clock;
     // The command processor publishes another batch every few microseconds while working
@@ -909,20 +911,21 @@ void CommandRecorder::ConsumerLoop(std::stop_token stoken) {
     // / 8 threads even (82.1 both).
     static const auto SpinTime = [] {
         const char* v = std::getenv("SOTC_REC_SPIN_US");
-        return std::chrono::microseconds{v ? std::strtol(v, nullptr, 10) : (few_cpus ? 0 : 250)};
+        return std::chrono::microseconds{
+            v ? std::clamp(std::strtol(v, nullptr, 10), 0L, 1000000L) : (few_cpus ? 0 : 250)};
     }();
-    // sotc: SOTC_REC_SLEEP_US sets the idle wait. On Windows the default 500 us rounds to 0 and the
-    // thread spins: 61.1 vs 57.7 FPS on the attract demo (i9-13900K + RTX 2060 SUPER) against a
-    // 2 ms sleep (PR #81, jownatan), which frees the core on laptops and APUs (set 2000 there).
-    // With 8 logical processors or fewer the default is that 2 ms sleep: the spinning recorder took
-    // a whole core the game needs. Attract demo on a Ryzen 7 5700X held to 4 logical processors:
-    // stuck loading while it spun, 77 FPS sleeping; at 8 and 16 the two were even.
+    // sotc: after the bounded spin, park until publication or shutdown. The old 500 us
+    // wait rounded to zero on Windows and kept a core polling even with no work.
+    // A positive override retains a timed wait for diagnosis, rounded up to at least 1 ms.
     static const auto SleepTime = [] {
         const char* v = std::getenv("SOTC_REC_SLEEP_US");
-        const auto sleep =
-            std::chrono::microseconds{v ? std::strtol(v, nullptr, 10) : (few_cpus ? 2000 : 500)};
-        LOG_WARNING(Render_Vulkan, "GPU recorder: {} logical processors, spin {} us, idle wait {} us",
-                    logical, SpinTime.count(), sleep.count());
+        const long requested = v ? std::strtol(v, nullptr, 10) : 0;
+        const auto sleep = std::chrono::milliseconds{
+            requested > 0 ? (std::min(requested, 1000000L) + 999) / 1000 : 0};
+        LOG_WARNING(Render_Vulkan,
+                    "GPU recorder: {} logical processors, spin {} us, idle wait {} ({} ms timeout)",
+                    logical, SpinTime.count(), sleep.count() ? "timed" : "event-driven",
+                    sleep.count());
         return sleep;
     }();
 
@@ -947,8 +950,12 @@ void CommandRecorder::ConsumerLoop(std::stop_token stoken) {
                 std::atomic_thread_fence(std::memory_order_seq_cst);
                 if (chunk->committed.load(std::memory_order_acquire) == pos) {
                     std::unique_lock lk{wake_mutex};
-                    wake_cv.wait_for(lk, SleepTime,
-                                     [&] { return wake_flag || stoken.stop_requested(); });
+                    const auto ready = [&] { return wake_flag || stoken.stop_requested(); };
+                    if (SleepTime.count() > 0) {
+                        wake_cv.wait_for(lk, SleepTime, ready);
+                    } else {
+                        wake_cv.wait(lk, ready);
+                    }
                     wake_flag = false;
                 }
                 consumer_sleeping.store(false, std::memory_order_relaxed);
@@ -986,6 +993,12 @@ void CommandRecorder::ConsumerLoop(std::stop_token stoken) {
                     .count());
         }
     }
+    // sotc: the last two chunks never cross another End marker. Return them only after
+    // all callbacks have run, so shutdown frees them along with the recycled chunks.
+    if (previous) {
+        RecycleChunk(previous);
+    }
+    RecycleChunk(chunk);
 }
 
 } // namespace Vulkan

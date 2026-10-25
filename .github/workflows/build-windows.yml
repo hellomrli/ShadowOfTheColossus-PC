@@ -63,9 +63,11 @@ jobs:
           ls -l build.sh
           od -c build.sh | head -2
           bash -x build.sh
-          ninja -C out/gpu sotc-live-test recorded-external-test
+          ninja -C out/gpu sotc-live-test recorded-external-test overlay-frame-state-test cpu-usage-test
           ./out/gpu/sotc-live-test.exe
           ./out/gpu/recorded-external-test.exe
+          ./out/gpu/overlay-frame-state-test.exe
+          ./out/gpu/cpu-usage-test.exe
           clang -std=c11 -O2 -fomit-frame-pointer -Wall -Wextra -Werror tests/test_win_unwind.c -lntdll -o out/win-unwind-test.exe
           ./out/win-unwind-test.exe
           clang++ -std=c++20 -O2 -Wall -Wextra -Werror -Igpu/shadps4 tests/test_cache_blob.cpp gpu/shadps4/video_core/cache_blob.cpp -o out/cache-blob-test.exe

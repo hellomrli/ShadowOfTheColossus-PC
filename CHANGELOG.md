@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.66 (pre-release) — 2026-10-25
+- **Estabilidade/CPU, primeira etapa:** o gravador mantem o spin curto, mas depois espera
+  uma notificacao em vez de repetir um timeout de 500 us que virava zero no Windows.
+  Publicacao de lote, `Kick`, passagem de chunk e encerramento acordam a thread; a passagem
+  de chunk agora tambem notifica. `SOTC_REC_SLEEP_US` ausente/nao positivo usa eventos;
+  valores positivos sao arredondados para milissegundos, de 1 a 1000 ms, para diagnostico.
+- **Encerramento:** os dois ultimos chunks do gravador voltam ao pool depois de executar
+  seus callbacks, permitindo liberar toda a fila no shutdown. Teste com ASan/UBSan e
+  deteccao de leaks cobre varios ciclos de criacao/encerramento.
+- **CPU medida pelo sistema:** uma linha `[CPU]` por minuto mostra uso total do processo
+  normalizado pelas CPUs logicas disponiveis e uso individual de comando, draw, gravador,
+  presenter e videoout (100% = uma CPU logica). Nao confunde tempo bloqueado com CPU ocupada;
+  `-1` indica medida indisponivel ou thread trocada. Sem contadores por draw.
+- **Carregamento:** registra o fim mesmo quando a interface nao precisa desenhar nada.
+  Antes, o retorno antecipado adiava essa linha ate um aviso como F7/F8: os 117/161 s dos
+  logs nao mediam necessariamente o tempo real de carregamento. Flags de dialogos e
+  inicializacao consultadas por outras threads agora sao atomicas.
+- **Validacao:** testes do gravador cobrem acordar por lote, chunk, `Kick` e shutdown;
+  novos testes de estado da interface e de clocks/vida das threads nao exigem GPU.
+  A amostra de CPU do gravador ocioso e informativa, nao um benchmark do jogo.
+- **Prioridade do jogador:** estabilidade geral e eficiencia de CPU antes de ampliar DLSS.
+  O novo log da 0.65 confirma criacao DLAA 1080p e cerca de 7,5 minutos sem a queda anterior,
+  com FSR 3 e saida 0; nao comprova estabilidade em todas as areas. FSR 1 + FSR 3 continua
+  disponivel. Nenhuma protecao de memoria, patch de versao, cache de shaders ou parametro
+  DLSS/FSR foi desativado/trocado para obter esses resultados. Gameplay da 0.66 ainda requer teste.
+
 ## 0.65 (pre-release) — 2026-10-25
 - **DLSS com gravacao em thread:** NGX recebia o handle interno de comando usado pelo produtor,
   nao um `VkCommandBuffer` real. NGX carrega as funcoes Vulkan diretamente e nao passa pelos

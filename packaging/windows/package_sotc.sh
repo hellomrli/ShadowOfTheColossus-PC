@@ -87,7 +87,8 @@ cp scripts/prepare.py scripts/link_libc.py scripts/link_modules.py scripts/conte
 cp sotc.py SotC.bat LICENSE CHANGELOG.md "$dest/"
 cp docs/sotc/README-SotC.md "$dest/README.md"
 mkdir -p "$dest/docs/sotc"
-cp docs/sotc/CRASH-NVIDIA-2026-10-25.md docs/sotc/DLSS.md "$dest/docs/sotc/"
+cp docs/sotc/CRASH-NVIDIA-2026-10-25.md docs/sotc/DLSS.md \
+   docs/sotc/STABILITY-CPU-2026-10-25.md "$dest/docs/sotc/"
 cat > "$dest/sotc.ini" <<'EOF'
 # Shadow of the Colossus PC - settings (see README.md)
 # Folder of your game dump (the one with eboot.bin):

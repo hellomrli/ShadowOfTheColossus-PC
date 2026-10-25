@@ -110,8 +110,7 @@ public:
     void Reserve(size_t bytes);
 
     /// Publish all queued work and wake the recording thread if it is sleeping at this submit point
-    /// Between kicks, publish smaller batches for the consumer to pick up while spinning or after
-    /// its short timed wait
+    /// Between kicks, smaller batches and chunk boundaries also wake a parked consumer.
     /// A Kick makes every command already queued visible before the submit or drain can continue
     void Kick();
 

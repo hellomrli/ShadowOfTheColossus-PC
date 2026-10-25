@@ -24,6 +24,7 @@
 #include "core/platform.h"
 #include "video_core/amdgpu/liverpool.h"
 #include "video_core/amdgpu/pm4_cmds.h"
+#include "video_core/host_cpu_usage.h"
 #include "video_core/renderdoc.h"
 #include "shader_recompiler/info.h"
 #include "video_core/renderer_vulkan/vk_pipeline_common.h"
@@ -118,6 +119,7 @@ static inline void CpuRelax() {
 
 void Liverpool::BackLoop(std::stop_token stoken) {
     Common::SetCurrentThreadName("shadPS4:GpuDraw");
+    const SotcCpu::ThreadScope cpu_scope{SotcCpu::Role::Draw};
     Shader::g_info_slot = 1;
 #ifdef __linux__
     back_tid = gettid();
@@ -457,6 +459,7 @@ void Liverpool::ProcessCommands() {
 
 void Liverpool::Process(std::stop_token stoken) {
     Common::SetCurrentThreadName("shadPS4:GpuCommandProcessor");
+    const SotcCpu::ThreadScope cpu_scope{SotcCpu::Role::Command};
     gpu_id = std::this_thread::get_id();
 #ifdef __linux__
     gpu_tid = gettid();

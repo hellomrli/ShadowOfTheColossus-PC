@@ -1,4 +1,4 @@
-# Investigacao: queda NVIDIA ao iniciar (0.65 preview)
+# Investigacao: queda NVIDIA ao iniciar (resultado da 0.65)
 
 ## Evidencia disponivel
 
@@ -65,6 +65,22 @@ nesse PC e reforca o caminho DLSS como alvo. **Nao valida o DLSS da 0.65:** essa
 ocorreu antes da publicacao da correcao. Os avisos SRT/Phi/stack/event flag tambem aparecem
 na sessao sem queda; nao justificam, por si so, mudar esses subsistemas.
 
+### Teste depois da publicacao da 0.65
+
+O log seguinte na mesma RTX 3070 contem, ao contrario do controle FSR 1:
+
+```text
+SOTC DLSS: creating 1920x1080 -> 1920x1080, quality 0 (real command buffer)
+SOTC DLSS: DLSS 1920x1080 -> 1920x1080, quality 0, preset 0
+```
+
+A criacao DLAA foi concluida, a sessao continuou ate cerca de 7:24 e saiu com codigo 0,
+sem o acesso nulo anterior. FSR 3 estava ativo desde o inicio e foi desligado em 7:18.
+Isso valida a criacao e a ausencia daquela queda nessa amostra, nao a estabilidade em todas
+as areas nem a qualidade visual. O jogador pediu que a proxima etapa priorize estabilidade
+geral/CPU e possa continuar com FSR 1 + FSR 3. Veja
+[STABILITY-CPU-2026-10-25.md](STABILITY-CPU-2026-10-25.md).
+
 ## Defeito de handoff corrigido na 0.65
 
 Com `SOTC_RECORD_THREAD` ativo, o produtor recebe um handle interno de comando. Os thunks
@@ -87,7 +103,8 @@ Falhas retornadas por NGX mantem FSR 1 e agora tambem fecham a label de debug. U
 invalido dentro do driver nao e uma falha retornada: nao ha promessa de captura/recuperacao.
 
 Esse handoff invalido e um defeito verificavel no codigo e e consistente com a pilha e com
-o controle FSR 1. A ausencia da queda com DLSS na RTX 3070 ainda precisa de teste da 0.65.
+o controle FSR 1. O teste posterior da 0.65 completou a criacao e nao repetiu a queda;
+validacao de sessoes longas e outras areas permanece aberta.
 Nao foram trocados parametros NGX, driver, padroes do renderer ou cache para esconder a falha.
 
 ## Achados de review corrigidos na 0.64
@@ -108,7 +125,7 @@ ou da saida do recompiler nesta versao. Atualizar da 0.63 nao exige limpar um ca
 Esses defeitos foram encontrados no codigo e cobertos por regressoes independentes de GPU.
 Nenhum deles, isoladamente, comprova a causa do acesso nulo dentro da DLL NVIDIA.
 
-## Teste controlado no PC afetado
+## Teste controlado se a queda DLSS voltar
 
 Guarde um backup de `user/` e `sotc.ini`. Use a preview em uma pasta separada, mantenha o
 mesmo dump e as mesmas opcoes. Nao renomeie a pasta do jogo, edite o SFO ou force offsets EU.
@@ -147,4 +164,5 @@ aninhada com handle real. Nao usa NGX e nao prova validade de parametros ou sinc
 
 O CI compila e empacota o port no Windows, testa o lancador congelado e inicia o loader sem
 MSYS2 no PATH. Isso verifica o pacote, nao a renderizacao, sincronizacao Vulkan, avaliacao NGX,
-qualidade da imagem ou a ausencia de quedas no jogo. A 0.65 permanece pre-release.
+qualidade da imagem ou a ausencia de quedas no jogo. O resultado do jogador e separado
+dessas verificacoes. A 0.65 permanece pre-release; a etapa 0.66 trata estabilidade/CPU.

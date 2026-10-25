@@ -20,6 +20,7 @@
 #include "core/libraries/videoout/videoout_error.h"
 #include "imgui/renderer/imgui_core.h"
 #include "video_core/amdgpu/liverpool.h"
+#include "video_core/host_cpu_usage.h"
 #include "video_core/renderer_vulkan/vk_framegen.h"
 #include "bbport_overlay.h"
 #include "video_core/renderer_vulkan/vk_presenter.h"
@@ -322,6 +323,7 @@ void VideoOutDriver::RunPresentJob(std::function<void()> job, bool droppable) {
 
 void VideoOutDriver::PresentJobThread(std::stop_token token) {
     Common::SetCurrentThreadName("shadPS4:Presenter");
+    const SotcCpu::ThreadScope cpu_scope{SotcCpu::Role::Presenter};
     while (!token.stop_requested()) {
         std::function<void()> job;
         {
@@ -348,6 +350,7 @@ void VideoOutDriver::Flip(const Request& req) {
         // than 50 ms, the slowest, video memory in use).
         using Clock = std::chrono::steady_clock;
         static Clock::time_point minute_start = Clock::now(), last_flip = minute_start;
+        static auto cpu_previous = SotcCpu::Sample();
         static u32 minute_flips = 0, slow = 0;
         static double worst_ms = 0.0;
         const Clock::time_point now = Clock::now();
@@ -358,11 +361,21 @@ void VideoOutDriver::Flip(const Request& req) {
         slow += gap_ms > 50.0;
         const double seconds = std::chrono::duration<double>(now - minute_start).count();
         if (seconds >= 60.0) {
+            const auto cpu_now = SotcCpu::Sample();
+            const auto cpu = SotcCpu::Between(cpu_previous, cpu_now);
+            cpu_previous = cpu_now;
             SotcEvent::Log("PERF",
                            SotcUi::T("Último minuto: %.1f FPS médio, %u quadros acima de 50 ms, pior %.0f ms, memória de vídeo %llu MB",
                                      "Last minute: %.1f FPS average, %u frames over 50 ms, worst %.0f ms, video memory %llu MB"),
                            minute_flips / seconds, slow, worst_ms,
                            static_cast<unsigned long long>(SotcStats::vram_used.load(std::memory_order_relaxed) >> 20));
+            SotcEvent::Log("CPU",
+                          "Process %.1f%% of %u logical CPUs; threads %% of one logical CPU: "
+                          "command %.1f, draw %.1f, recorder %.1f, presenter %.1f, videoout %.1f "
+                          "(-1 = unavailable)",
+                          cpu.process_percent, cpu_now.logical_processors, cpu.thread_percent[0],
+                          cpu.thread_percent[1], cpu.thread_percent[2], cpu.thread_percent[3],
+                          cpu.thread_percent[4]);
             if (const u64 skipped = SotcStats::rb_hot_cpu_skipped.exchange(0, std::memory_order_relaxed)) {
                 SotcEvent::Log("MEMORY",
                                SotcUi::T("Leituras da GPU não aplicadas sobre memória que o jogo reescreveu: %llu KB",
@@ -898,6 +911,7 @@ void VideoOutDriver::PresentThread(std::stop_token token) {
                                                  EmulatorSettings.GetVblankFrequency());
 
     Common::SetCurrentThreadName("shadPS4:PresentThread");
+    const SotcCpu::ThreadScope cpu_scope{SotcCpu::Role::VideoOut};
     Common::SetCurrentThreadRealtime(vblank_period);
 
     Common::AccurateTimer timer{vblank_period};

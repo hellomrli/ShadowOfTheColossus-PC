@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Run the production command recorder against a fake driver; no Vulkan device or NGX needed.
 #include <cassert>
+#include <array>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <future>
 #include <memory>
 #include <thread>
 #include <vector>
 
 #include "common/thread.h"
 #include "video_core/gpu_diagnostics.h"
+#include "video_core/host_cpu_usage.h"
 #include "video_core/renderer_vulkan/vk_recorder.h"
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
@@ -114,6 +118,54 @@ void TestRecorded(CommandRecorder& recorder, bool create_ok, bool evaluate_ok) {
     assert(events.size() == conversions + (create_ok ? 4 : 3));
     assert(events.back() == (result ? 9000 : 9001));
 }
+
+void TestWakeups(CommandRecorder& recorder) {
+    using namespace std::chrono_literals;
+    const std::array<unsigned char, 128 * 1024> padding{};
+    for (int round = 0; round < 30; ++round) {
+        recorder.Sync();
+        // Alternate publication during the spin/park transition and while fully idle.
+        if (round % 2) {
+            std::this_thread::sleep_for(10ms);
+        }
+        std::promise<void> done;
+        auto completion = done.get_future();
+        recorder.Run([&] {
+            assert(recorder.IsRecordingThread());
+            done.set_value();
+        });
+        switch (round % 3) {
+        case 0:
+            recorder.Kick();
+            break;
+        case 1:
+            for (int i = 0; i < 31; ++i) {
+                recorder.Run([] {});
+            }
+            break;
+        case 2:
+            // No Kick or full command batch: only the chunk's End publishes the callback.
+            (void)recorder.Copy(padding.data(), padding.size());
+            (void)recorder.Copy(padding.data(), padding.size());
+            break;
+        }
+        assert(completion.wait_for(2s) == std::future_status::ready);
+        completion.get();
+        recorder.Sync();
+    }
+}
+
+void MeasureIdleCpu(CommandRecorder& recorder) {
+    recorder.Sync();
+    std::this_thread::sleep_for(std::chrono::milliseconds{20});
+    const auto before = SotcCpu::Sample();
+    std::this_thread::sleep_for(std::chrono::milliseconds{250});
+    const auto usage = SotcCpu::Between(before, SotcCpu::Sample());
+    const double percent = usage.thread_percent[static_cast<std::size_t>(SotcCpu::Role::Recorder)];
+    assert(percent >= 0);
+    // Informational measurement, not a timing-sensitive pass threshold on shared CI runners.
+    std::printf("recorder idle CPU: %.2f%% of one logical CPU (250 ms empty-queue sample)\n", percent);
+}
 } // namespace
 
 int main() {
@@ -127,7 +179,16 @@ int main() {
             TestRecorded(recorder, false, true);
             TestRecorded(recorder, true, false);
         }
+        TestWakeups(recorder);
+        MeasureIdleCpu(recorder);
+    }
+    for (int i = 0; i < 4; ++i) {
+        // Shutdown must wake a parked recorder and release its last stream chunks.
+        CommandRecorder recorder;
+        recorder.Sync();
+        std::this_thread::sleep_for(std::chrono::milliseconds{10});
     }
     TestInline();
     std::puts("recorded external calls: real handles, ordering, ownership, results and lifetime OK");
+    std::puts("recorder wakeups: explicit kick, batch, chunk boundary and idle shutdown OK");
 }

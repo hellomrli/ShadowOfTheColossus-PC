@@ -7,9 +7,10 @@ shadPS4 SotC. A base é o [bloodborne_pc](https://github.com/Supermedo/bloodborn
 
 Este pacote **não contém o jogo nem firmware da Sony**. Você precisa ter os seus.
 
-**0.65 (pre-release):** corrige o envio de comandos ao DLSS com gravação em thread.
-O teste com DLSS na RTX 3070 afetada ainda está pendente; selecionar FSR 1 é o contorno
-confirmado pelo jogador. Previews são baixadas manualmente, sem mudar o canal estável.
+**0.66 (pre-release):** primeira etapa de estabilidade/CPU: espera por eventos no gravador,
+liberação completa da fila, registro correto de carregamento e uso real de CPU por thread.
+O jogador pode manter FSR 1 + FSR 3; isso não promete estabilidade de todo o jogo.
+Previews são baixadas manualmente, sem mudar o canal estável.
 
 ## Requisitos
 
@@ -142,6 +143,24 @@ normal o jogo roda travado em 30 FPS, como no PS4.
 
 ## Diagnóstico
 
+### Estabilidade e CPU
+
+Uma linha `[CPU]` por minuto mostra o uso do processo como percentual das CPUs lógicas
+disponíveis e o uso de cada thread como percentual de uma CPU lógica. `-1` é indisponível,
+não uso negativo. CPU total baixo pode esconder uma thread saturada, ou ser normal com
+limite de 30 FPS. Compare sempre o mesmo trecho e o mesmo limite de FPS; `[PERF]` conta
+quadros do jogo, não os interpolados pelo FSR 3.
+
+O gravador agora espera notificações depois do spin curto, sem polling ocioso padrão.
+`SOTC_REC_SLEEP_US` ausente/não positivo usa eventos; positivo permite um timeout de diagnóstico
+arredondado para cima a milissegundos. Os antigos logs de carregamento que só terminavam
+em F7/F8 tinham registro atrasado; a 0.66 corrige esse registro, não promete cargas mais rápidas.
+
+Para testar, mantenha FSR 1 + FSR 3 e suas outras opções, carregue saves, troque de área,
+salve/recarregue e saia. Envie o log com `[CPU]`/`[PERF]` e os sintomas, ou o dump se cair.
+Não desative proteções de memória nem force patches de outra versão.
+Detalhes em `docs/sotc/STABILITY-CPU-2026-10-25.md`, incluído neste pacote.
+
 ### Queda no driver NVIDIA ao iniciar (RTX 3070)
 
 Os relatos de 2026-10-25 caem em `nvoglv64.dll+0xe35140`, inclusive com geração de quadros
@@ -150,8 +169,10 @@ que selecionar FSR 1 evita a queda: cerca de dez minutos, saída com código 0. 
 ocorreu antes da correção e não valida DLSS na 0.65.
 
 A 0.65 corrige um handle interno inválido entregue a NGX: criação e avaliação agora rodam
-na ordem correta, na thread proprietária do comando Vulkan real. **A confirmação de que isso
-elimina a queda com DLSS ainda depende do PC afetado.**
+na ordem correta, na thread proprietária do comando Vulkan real. No teste posterior, o
+jogador confirmou criação DLAA 1080p e cerca de 7,5 minutos com FSR 3, saída 0 e sem a queda
+anterior. É uma amostra de sucesso, não validação de todas as áreas ou da qualidade visual.
+A prioridade atual é estabilidade/CPU; os controles abaixo servem se a queda DLSS voltar.
 
 1. Para continuar jogando sem testar DLSS, mantenha **FSR 1**, o contorno observado nesse PC.
 2. Para testar a 0.65, selecione **DLSS** e mantenha **Geração de quadros: Desligada**.

@@ -80,7 +80,8 @@ inicializacao NGX, nao e apenas o seletor de upscaler.
 Esses caminhos nao garantem recuperacao de um acesso invalido no driver. A queda RTX 3070
 relatada e o contorno FSR 1 estao documentados em
 [CRASH-NVIDIA-2026-10-25.md](CRASH-NVIDIA-2026-10-25.md). A 0.65 corrige o handoff do comando;
-o teste com DLSS no PC afetado ainda e necessario.
+o jogador confirmou criacao DLAA 1080p, cerca de 7,5 minutos com FSR 3 e saida 0. Sessoes
+longas e qualidade visual ainda nao estao validadas; a proxima prioridade e estabilidade/CPU.
 
 ## Verificar uma execucao
 
