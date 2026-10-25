@@ -1,7 +1,9 @@
 """Launcher frame rate modes: above 30 the game's own 60 FPS target (sotc_modes.py fps60game)."""
 from paths import ROOT
+import os
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(ROOT / 'launcher'))
 try:
@@ -14,7 +16,10 @@ except ImportError as error:  # no Tkinter
 @unittest.skipIf(launcher is None, 'launcher not importable')
 class FpsModeTests(unittest.TestCase):
     def env(self, fps_mode, af16=True):
-        return launcher.game_environment({**launcher.APP_DEFAULTS, 'fps_mode': fps_mode, 'af16': af16})
+        with patch.dict(os.environ, {}, clear=True), \
+                patch.object(launcher, 'game_info', return_value=None), \
+                patch.object(launcher, 'window_icon_file', return_value=None):
+            return launcher.game_environment({**launcher.APP_DEFAULTS, 'fps_mode': fps_mode, 'af16': af16})
 
     def test_modes(self):
         for fps_mode, modes, cap, limit in (('30', 'af16', '30', '0'),

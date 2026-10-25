@@ -37,8 +37,8 @@ game image (render size, R8G8B8A8Srgb / B8G8R8A8Srgb / A2R10G10B10)
 - **Motion vectors:** the G-buffer stores `curUV - prevUV`, so `mv_scale_x/y` are the render
   width/height. The feature is created with `MVLowRes`.
 - **Jitter:** the game's own TAA jitter in pixels, the same value DLSS-G gets.
-- **Reset:** camera cuts from the game constants, plus the first frame after the feature is
-  created.
+- **Reset:** camera cuts from the game constants, the first frame after the feature is created,
+  and the first frame after DLSS was skipped (missing inputs, HDR or a different upscaler).
 
 ## Settings
 
@@ -46,9 +46,15 @@ game image (render size, R8G8B8A8Srgb / B8G8R8A8Srgb / A2R10G10B10)
 |---|---|
 | `SOTC_DLSS=0` | Off; FSR 1 is used. |
 | `SOTC_DLSS=1` | On when the DLLs and an RTX card are present (the default). |
+| `SOTC_UPSCALER=dlss/fsr1/bilinear` | Startup selection, shared with the launcher and in-game menu. FSR 1/bilinear selection does not disable NGX, so DLSS can still be selected live. |
 | `SOTC_RENDER_RES=WxH` | The game renders smaller; `SOTC_OUTPUT_RES=WxH` keeps the presentation size — DLSS upscales between them. |
 | Menu → Quick settings → Upscaler | DLSS / FSR 1 / Bilinear, applied at the next frame. |
-| Menu → Nitidez (RCAS) | Also sets DLSS sharpness (0..1). |
+| Menu → Nitidez (RCAS) | Also sets DLSS sharpness (0..1); unlike RCAS attenuation, larger values mean stronger sharpening. |
+
+New launcher settings default to `dlss`; existing `fsr1`/`bilinear` settings are not migrated.
+Explicit DLSS selection always leaves FSR 1 enabled as its fallback. For older scripts without
+`SOTC_UPSCALER`, an explicit `BB_FSR1=0` still selects bilinear; otherwise DLSS is preferred.
+`SOTC_DLSS=0` is a hard disable for that session, not the launcher's mode selector.
 
 ## Fallbacks (all print `SOTC DLSS:` once and keep FSR 1)
 
@@ -72,6 +78,11 @@ game image (render size, R8G8B8A8Srgb / B8G8R8A8Srgb / A2R10G10B10)
    the log.
 5. Exit the game: no crash after the swapchain is destroyed (NGX is shut down in
    `Instance::~Instance`, before the device).
+6. Select FSR 1 or Bilinear in the launcher, then DLSS in F1: switching should work without a
+   restart. Close and reopen the launcher: the saved choice must still be selected.
+7. With DLSS selected, menus/movies and `SOTC_DLSS=0` must keep the FSR 1 fallback, not silently
+   disable it. Check High/Medium/Low/Off sharpening in that order; the DLSS parameter must
+   decrease rather than increase. Visual verification still needs an RTX Windows run.
 
 ## Building
 

@@ -63,6 +63,8 @@ jobs:
           ls -l build.sh
           od -c build.sh | head -2
           bash -x build.sh
+          ninja -C out/gpu sotc-live-test
+          ./out/gpu/sotc-live-test.exe
 
       - name: NVIDIA DLSS SDK (headers, import library, runtime)
         shell: pwsh
@@ -109,6 +111,23 @@ jobs:
           export PATH="/usr/bin:/clang64/bin:$PATH"
           export MSYS2_ROOT=/
           bash packaging/windows/package_sotc.sh
+
+      - name: Smoke test the frozen launcher (no GPU)
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+          import subprocess
+
+          report = Path("out/package-smoke.json").resolve()
+          report.unlink(missing_ok=True)
+          subprocess.run([
+              str(Path("dist/SotC-PC/SotC.exe").resolve()), "--script",
+              str(Path("packaging/windows/smoke_launcher.py").resolve()), str(report),
+          ], check=True, timeout=60)
+          result = json.loads(report.read_text(encoding="utf-8"))
+          assert result["status"] == "ok", result
+          print(result)
 
       - name: Upload the package
         uses: actions/upload-artifact@v4

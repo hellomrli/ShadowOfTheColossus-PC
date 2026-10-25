@@ -821,19 +821,8 @@ bool CapturingInputs() {
 }
 
 bool Upscaling() {
-    // The menu's "Upscaler" combo wins; -1 keeps the startup choice (SOTC_DLSS=0 disables).
-    const int live = SotcLive::dlss.load(std::memory_order_relaxed);
-    if (live == 0) {
+    if (SotcLive::GetUpscaler() != SotcLive::Upscaler::Dlss) {
         return false;
-    }
-    if (live < 0) {
-        static const bool enabled = [] {
-            const char* v = std::getenv("SOTC_DLSS");
-            return !(v && v[0] == '0');
-        }();
-        if (!enabled) {
-            return false;
-        }
     }
     const Dlss* dlss = Dlss::Get();
     return dlss && dlss->Available();

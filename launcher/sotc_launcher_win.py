@@ -38,7 +38,7 @@ CONFIG_DIR = PORT_DIR / 'user'
 CONFIG_FILE = CONFIG_DIR / 'launcher_settings.json'
 GAME_ID, GAME_VERSION = 'CUSA08809', '01.01'
 SYS_MODULES = ('libSceUlt.sprx', 'libSceNgs2.sprx')
-VERSION = '0.61'
+VERSION = '0.63'
 MAX_LOG_LINES = 6000
 NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 
@@ -158,7 +158,7 @@ APP_DEFAULTS = {'ui_language': '', 'game_dir': str(PORT_DIR.parent / GAME_ID), '
                 'user_dir': '', 'af16': True, 'textures': 'high', 'window_icon_file': '', 'fps60': False, 'fps_mode': '30', 'button_icons': 'ps', 'fullscreen': False,
                 'present_mode': 'Mailbox', 'language': '', 'player_name': '', 'show_fps': False,
                 'readbacks': '', 'extra_env': '', 'close_on_play': False, 'gamepad': '',
-                'output_res': '1920x1080', 'upscaler': 'fsr1', 'sharpness': '250', 'mouse': True,
+                'output_res': '1920x1080', 'upscaler': 'dlss', 'sharpness': '250', 'mouse': True,
                 'mouse_sens': '1.0', 'mouse_invert': False, 'neo': False, 'fx_vignette': True,
                 'fx_fog': True, 'fx_ssao': True, 'engine_cvars': '', 'perf_culling': True,
                 'perf_record_thread': True, 'perf_dma': True, 'gpu_submit': 'auto', 'vram_use': 'normal', 'volume': '100', 'shadow_reuse': '0', 'library_dirs': [], 'keys': {},
@@ -246,7 +246,8 @@ SCREENS = [('1920x1080', '16:9, 1080p'), ('2560x1440', '16:9, 1440p'), ('3840x21
            ('3840x1080', '32:9'), ('5120x1440', '32:9')]
 OUTPUTS = [('1280x720', ('1280 × 720 (16:9, 720p)', '1280 × 720 (16:9, 720p)'))] + [
     (size, (f"{size.replace('x', ' × ')} ({label})",) * 2) for size, label in SCREENS]
-UPSCALERS = [('fsr1', ('FSR 1 (AMD, qualquer placa)', 'FSR 1 (AMD, any GPU)')),
+UPSCALERS = [('dlss', ('DLSS (RTX; FSR 1 nas outras placas)', 'DLSS (RTX; FSR 1 fallback)')),
+             ('fsr1', ('FSR 1 (AMD, qualquer placa)', 'FSR 1 (AMD, any GPU)')),
              ('bilinear', ('Bilinear (simples)', 'Bilinear (plain)'))]
 # Button icons in the game: the PlayStation prompts, or Xbox ones drawn for the port
 # (tools/make_button_icons.py, glyphs/xbox) put in place of the game's textures.
@@ -400,7 +401,7 @@ def start_event_log(log_dir, settings, env):
             VERSION, time.strftime('%Y-%m-%d %H:%M:%S')),
         _('Windows {} | jogo: {}', 'Windows {} | game: {}').format(platform.version(), settings.get('game_dir') or '?'),
         _('Saída: {} | Upscaler: {} | Nitidez: {}', 'Output: {} | Upscaler: {} | Sharpening: {}').format(
-            words(OUTPUTS, 'output_res', '1920x1080'), words(UPSCALERS, 'upscaler', 'fsr1'), words(SHARPNESS, 'sharpness', '250')),
+            words(OUTPUTS, 'output_res', '1920x1080'), words(UPSCALERS, 'upscaler', 'dlss'), words(SHARPNESS, 'sharpness', '250')),
         _('FPS: {} | Texturas: {} | Filtro 16x: {} | Modo PS4 Pro: {}', 'FPS: {} | Textures: {} | 16x filtering: {} | PS4 Pro mode: {}').format(
             words(FPS_MODES, 'fps_mode', '30'), words(TEXTURES, 'textures', 'high'), on_off(settings.get('af16')),
             on_off(env.get('SOTC_NEO') == '1')),
@@ -487,9 +488,9 @@ def load_settings():
 
 def window_icon_file(s):
     """The game window's icon as a 64x64 BMP in the data folder (bb-probe: SOTC_WINDOW_ICON):
-    empty setting = the port's own (launcher/window_icon.png, original art: the swordsman), 'game'
-    = icon0.png of the player's dump, else a picture the player chose (cropped to a centred
-    square). Nothing of the game or of anyone's art is packaged."""
+    empty setting = the port's own window_icon.png or shipped window_icon.ico; 'game' =
+    icon0.png of the player's dump, else a picture the player chose (cropped to a centred square).
+    Nothing of the game or of anyone's art is packaged."""
     try:
         from PIL import Image
         choice = s.get('window_icon_file') or ''
@@ -500,6 +501,8 @@ def window_icon_file(s):
             source, target = custom, user_dir(s) / 'window_icon_custom.bmp'
         else:
             source, target = PORT_DIR / 'launcher' / 'window_icon.png', user_dir(s) / 'window_icon_port.bmp'
+            if not source.is_file():
+                source = source.with_suffix('.ico')
         if (not target.is_file() or target.stat().st_mtime < source.stat().st_mtime
                 or source == custom):
             with Image.open(source) as image:
@@ -599,7 +602,10 @@ def game_environment(s):
     output = env['SOTC_OUTPUT_RES']
     if output not in ('1280x720', '1920x1080') and env['SOTC_NEO'] == '0':
         env['SOTC_RENDER_RES'] = output
-    env['BB_FSR1'] = '1' if s.get('upscaler', 'fsr1') == 'fsr1' else '0'
+    # Selection is separate from SOTC_DLSS=0 (which prevents loading NGX at all), so the
+    # in-game menu can switch from FSR 1/bilinear to DLSS without restarting.
+    env['SOTC_UPSCALER'] = s.get('upscaler') or 'dlss'
+    env['BB_FSR1'] = '0' if env['SOTC_UPSCALER'] == 'bilinear' else '1'
     if s.get('sharpness') == 'off':
         env['BB_RCAS'] = '0'
     else:
@@ -684,8 +690,8 @@ class Launcher:
             error = sotc_update.cleanup(PORT_DIR)
             if error:
                 root.after(500, lambda: messagebox.showerror('Shadow of the Colossus', _(
-                    'A atualização falhou e a versão anterior foi mantida:\n{}',
-                    'The update failed and the previous version was kept:\n{}').format(error)))
+                    'A atualização não foi concluída. Verifique os detalhes antes de tentar novamente:\n{}',
+                    'The update did not complete. Check the details before trying again:\n{}').format(error)))
         if self.app.get('check_updates', True) and (FROZEN or os.environ.get('SOTC_UPDATE_URL')):
             root.after(2000, lambda: self.check_updates(False))
 
@@ -1158,7 +1164,8 @@ class Launcher:
                    'look stretched. 720p renders at 1080p; PS4 Pro mode uses the Pro sizes. On a monitor smaller '
                    'than the output the window fits the screen and fullscreen uses the whole monitor.'))
         self.row(f, _('Upscaler', 'Upscaler'), self.choice(f, 'upscaler', UPSCALERS),
-                 _('FSR 1 amplia com bordas nítidas (acima de 1080p).', 'FSR 1 upscales with sharp edges (above 1080p).'))
+                 _('DLSS usa uma placa RTX; sem suporte, usa FSR 1. FSR 1 e Bilinear podem ser escolhidos separadamente.',
+                   'DLSS uses an RTX GPU; without support it falls back to FSR 1. FSR 1 and Bilinear can be selected separately.'))
         self.row(f, _('Nitidez (RCAS)', 'Sharpening (RCAS)'), self.choice(f, 'sharpness', SHARPNESS))
         self.section(f, _('Modo PS4 Pro', 'PS4 Pro mode'))
         self.check(f, 'neo', _('Apresentar-se como PS4 Pro', 'Present as a PS4 Pro'),
@@ -1399,7 +1406,8 @@ class Launcher:
     def summary(self):
         parts = [dict((k, _(*v)) for k, v in FPS_MODES).get(self.var('fps_mode').get(), '30 FPS'),
                  self.var('output_res').get().replace('x', ' × '),
-                 'FSR 1' if self.var('upscaler').get() == 'fsr1' else 'bilinear']
+                 {'dlss': 'DLSS / FSR 1', 'fsr1': 'FSR 1', 'bilinear': 'bilinear'}.get(
+                     self.var('upscaler').get(), 'DLSS / FSR 1')]
         framegen = self.var('framegen').get()
         if framegen != 'off':
             parts.append({'auto': _('geração de quadros', 'frame generation'), 'dlss': 'DLSS-G',

@@ -40,6 +40,8 @@ public:
 
     void Create(vk::Device device, VmaAllocator allocator, u32 num_images);
     void Destroy();
+    /// A skipped frame or a different upscaler breaks the temporal history chain.
+    void ResetHistory() { reset = true; }
 
     /// Returns the upscaled view (RGBA16F, output size), or null when DLSS did not run this
     /// frame (the caller then keeps its FSR 1 path).

@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.63 (pre-release) — 2026-10-25
+- **Pre-release deste fork:** inclui as correcoes da 0.62; a imagem e as trocas de modo do DLSS
+  ainda precisam de verificacao no Windows com RTX. O cache de shaders e refeito na primeira
+  abertura ao atualizar da 0.61 (`ShaderBinaryVersion` 38).
+- **Atualizador:** protege `user`, `update` e `sotc.ini` sem diferenciar maiusculas de minusculas;
+  recusa caminhos ambiguos do Windows, links e junctions nos arquivos substituidos. Aguarda a
+  saida real do lancador, com handles de 64 bits. Se a restauracao falhar ou for interrompida,
+  guarda `update/backup`, avisa ao abrir e bloqueia outra atualizacao ate a recuperacao manual.
+- **DLSS e lancador:** a escolha DLSS / FSR 1 / Bilinear e preservada entre sessoes e compartilhada
+  com o menu F1 por `SOTC_UPSCALER`. DLSS mantem FSR 1 como fallback; a nitidez deixa de usar a
+  atenuacao ao contrario, e voltar ao DLSS depois de quadros ignorados reinicia o historico.
+  Instalacoes novas preferem DLSS; escolhas antigas de FSR 1/Bilinear sao mantidas.
+- **Preparacao:** `param.sfo` e a origem dos arquivos da atualizacao invalidam o cache. Modulos
+  removidos nao ficam em `out/app-update`; uma preparacao interrompida nao reutiliza o carimbo
+  antigo. Os arquivos sobrepostos deixam de ser copiados duas vezes a cada abertura.
+- **Pacote:** usa o `window_icon.ico` do repositorio quando nao ha o PNG local, evitando a falha
+  de empacotamento num checkout limpo. Testes de regressao e smoke test do lancador congelado
+  adicionados ao CI.
+- **Canal de atualizacao:** consulta `hellomrli/ShadowOfTheColossus-PC`, nao o projeto upstream.
+  O atualizador continua no canal estavel; pre-releases precisam de download manual. Guarde
+  `user/` e o seu `sotc.ini` ao mudar de pasta.
+- Verificacao local: testes Python e teste C++ de configuracoes sem GPU; o build completo e a
+  imagem do DLSS ainda precisam de verificacao no Windows. Detalhes em
+  `docs/sotc/REVIEW-2026-10-25.md`.
+
 ## 0.62 — 2026-10-25
 - **DLSS no menu do jogo (F1 > Ajuste rápido > Upscaler):** DLSS / FSR 1 / Bilinear, aplicado no
   quadro seguinte; a opção DLSS só aparece quando a ponte e o `nvngx_dlss.dll` estão presentes e a

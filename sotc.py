@@ -22,6 +22,8 @@ Settings (environment variables, or sotc.ini beside this script as NAME=value li
                       and nvngx_dlss.dll (next to bb-probe.exe) DLSS replaces FSR 1
                       automatically: DLAA at the same render/output size, Super Resolution when
                       the game renders below the output (SOTC_RENDER_RES with SOTC_OUTPUT_RES).
+    SOTC_UPSCALER     optional: dlss (with FSR 1 fallback), fsr1 or bilinear. Unlike SOTC_DLSS=0,
+                      choosing fsr1/bilinear keeps DLSS available in the in-game menu.
     SOTC_RENDER_RES   optional: the game renders at WxH instead of 1920x1080 (e.g. 2560x1080 for
                       21:9, a wider view); the output follows its aspect; PS4 mode only; at most 1080
                       lines tall and 4.2 million pixels, larger sizes are scaled down
@@ -34,6 +36,7 @@ Extra arguments go to bb-probe.exe. Run from a console, the session is also save
 copied to <user>/crashes).
 """
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
@@ -109,13 +112,18 @@ def run_script(name, *args):
 
 
 def fingerprint(game, modules):
-    """Inputs of the prepared image: eboot, bundled modules, the user's modules, the scripts."""
+    """Inputs of the prepared image: eboot, metadata, modules, scripts and overlay sources."""
     digest = hashlib.sha256()
-    files = [game / 'eboot.bin', *sorted((game / 'sce_module').glob('*.prx')), *modules,
+    files = [game / 'eboot.bin', game / 'sce_sys' / 'param.sfo',
+             *sorted((game / 'sce_module').glob('*.prx')), *modules,
              *sorted(SCRIPTS.glob('*.py'))]
     for path in files:
         stat = path.stat()
         digest.update(f'{path.resolve()}|{stat.st_size}|{stat.st_mtime_ns}\n'.encode())
+    sources = game / '.sotc-sources.json'
+    if sources.is_file():
+        # Two dumps may have identical sizes/timestamps in the shared app-update directory.
+        digest.update(sources.read_bytes())
     return digest.hexdigest()
 
 
@@ -136,19 +144,29 @@ def merged_source(game, update, out):
     """The files the image is prepared from when an update is present: its eboot.bin, the base
     modules with the update's on top, its param.sfo (out/app-update, refreshed when they change)."""
     merged = out / 'app-update'
-    pairs = [(update / 'eboot.bin', merged / 'eboot.bin')]
+    pairs = {Path('eboot.bin'): update / 'eboot.bin'}
     for folder in (game / 'sce_module', update / 'sce_module'):
         if folder.is_dir():
-            pairs += [(p, merged / 'sce_module' / p.name) for p in folder.iterdir() if p.is_file()]
+            pairs.update((Path('sce_module') / p.name, p) for p in folder.iterdir() if p.is_file())
     for folder in (game / 'sce_sys', update / 'sce_sys'):
         if (folder / 'param.sfo').is_file():
-            pairs.append((folder / 'param.sfo', merged / 'sce_sys' / 'param.sfo'))
-    for source, target in pairs:
+            pairs[Path('sce_sys/param.sfo')] = folder / 'param.sfo'
+    sources = json.dumps({rel.as_posix(): str(src.resolve()) for rel, src in pairs.items()}, sort_keys=True)
+    stamp = merged / '.sotc-sources.json'
+    same_sources = stamp.is_file() and stamp.read_text(encoding='utf-8') == sources
+    # Only a completed refresh may be reused; a failed copy forces a full refresh next time.
+    stamp.unlink(missing_ok=True)
+    for old in merged.rglob('*'):
+        if (old.is_file() or old.is_symlink()) and old.relative_to(merged) not in pairs:
+            old.unlink()
+    for rel, source in pairs.items():
+        target = merged / rel
         stat = source.stat()
         current = target.stat() if target.is_file() else None
-        if not current or current.st_size != stat.st_size or current.st_mtime_ns != stat.st_mtime_ns:
+        if not same_sources or not current or current.st_size != stat.st_size or current.st_mtime_ns != stat.st_mtime_ns:
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
+    stamp.write_text(sources, encoding='utf-8')
     return merged
 
 
@@ -190,6 +208,9 @@ def main():
     images = [out / name for name in ('boot-linked.bin', 'content.bin', 'sotc-cpu.bin')]
     if not stamp.is_file() or stamp.read_text().strip() != wanted or not all(p.is_file() for p in images):
         print('Preparing the game image...')
+        # The scripts replace outputs in place; an interrupted rebuild must not keep an old
+        # success stamp that could accept a mixture of outputs when the inputs change back.
+        stamp.unlink(missing_ok=True)
         run_script('prepare.py', source, '--out', out)
         link = ['link_modules.py', source, '--out', out]
         if modules:
@@ -258,7 +279,6 @@ def main():
     # ["C:/Program Files/RenderDoc/renderdoccmd.exe", "capture", "-w", "-c", "<file>"]; F12 then
     # captures the frame (SOTC_RDOC_SUBMITS submissions).
     if env.get('SOTC_WRAP'):
-        import json
         command = json.loads(env['SOTC_WRAP']) + command
     # In a console the session also goes to user/last_run.log (as the launcher does; the launcher
     # reads this script's output into its own log, so a pipe means it is not written here).

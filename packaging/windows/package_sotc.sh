@@ -25,7 +25,11 @@ dest=out/stage/SotC-PC
 rm -rf -- out/stage
 mkdir -p "$dest/bin" "$dest/scripts" "$dest/launcher"
 cp -r out/pyi-dist/SotC/. "$dest/"
-cp launcher/sotc.ico launcher/sotc.png launcher/window_icon.png "$dest/launcher/"
+cp launcher/sotc.ico launcher/sotc.png launcher/window_icon.ico "$dest/launcher/"
+# The PNG is an optional local export; clean checkouts use the tracked ICO instead.
+if [[ -f launcher/window_icon.png ]]; then
+    cp launcher/window_icon.png "$dest/launcher/"
+fi
 # Xbox-style button icons drawn for the port (tools/make_button_icons.py). Optional: a source
 # checkout has none, so packaging (and CI) continues without them.
 if [ -d glyphs ]; then

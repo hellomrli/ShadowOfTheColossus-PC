@@ -500,7 +500,7 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
         free_queue.push(&frame);
     }
 
-    fsr_settings.enable = EmulatorSettings.IsFsrEnabled();
+    fsr_settings.enable = SotcLive::UsesFsr1(SotcLive::GetUpscaler());
     fsr_settings.use_rcas = EmulatorSettings.IsRcasEnabled();
     fsr_settings.rcas_attenuation =
         static_cast<float>(EmulatorSettings.GetRcasAttenuation() / 1000.f);
@@ -794,9 +794,7 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     runtime.FlushBarriers();
 
     // sotc: upscaler and sharpening as the in-game menu set them (sotc_live.h)
-    if (const int live = SotcLive::fsr1.load(std::memory_order_relaxed); live >= 0) {
-        fsr_settings.enable = live != 0;
-    }
+    fsr_settings.enable = SotcLive::UsesFsr1(SotcLive::GetUpscaler());
     if (const int live = SotcLive::rcas.load(std::memory_order_relaxed); live != -1) {
         fsr_settings.use_rcas = live >= 0;
         if (live >= 0) {
@@ -818,13 +816,14 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
                  vk::ImageAspectFlagBits::eDepth, upscale.motion, upscale.motion_view,
                  upscale.jitter_x, upscale.jitter_y, upscale.reset, frame->is_hdr,
                  static_cast<float>(upscale.width), static_cast<float>(upscale.height),
-                 fsr_settings.use_rcas ? std::min(fsr_settings.rcas_attenuation, 1.0f) : 0.0f},
+                 SotcLive::DlssSharpness(fsr_settings.use_rcas, fsr_settings.rcas_attenuation)},
                 1000.0f / 60.0f);
         }
     }
     if (dlss_view) {
         image_view = dlss_view;
     } else {
+        dlss_upscaler.ResetHistory();
         image_view = fsr_pass.Render(cmdbuf, image_view, image_size,
                                      {frame->width, frame->height}, fsr_settings, frame->is_hdr);
     }

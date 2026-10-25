@@ -354,8 +354,7 @@ void SetFpsMode(int mode) {
 // sotc: upscaler 0 = DLSS (RTX, when available), 1 = FSR 1, 2 = bilinear; applied at the next
 // frame (vk_presenter.cpp). DLSS is the default when the bridge DLLs are present.
 void SetUpscaler(int mode) {
-    SotcLive::dlss.store(mode == 0 ? 1 : 0, std::memory_order_relaxed);
-    SotcLive::fsr1.store(mode == 1 ? 1 : 0, std::memory_order_relaxed);
+    SotcLive::upscaler.store(mode, std::memory_order_relaxed);
     static const char* const keys[] = {"\"dlss\"", "\"fsr1\"", "\"bilinear\""};
     SaveLauncherSetting("upscaler", keys[mode]);
     static const char* const names[] = {"DLSS", "FSR 1", "Bilinear"};
@@ -406,29 +405,21 @@ void QuickSettings() {
     }
 
     // sotc: upscaler and sharpening, applied at the next frame (vk_presenter.cpp, sotc_live.h).
-    static const int env_fsr1 = [] {
-        const char* v = std::getenv("BB_FSR1");
-        return v && v[0] != '0' ? 1 : 0;
-    }();
     const bool dlss_ready = [] {
         const Vulkan::Dlss* dlss = Vulkan::Dlss::Get();
         return dlss && dlss->Available();
     }();
-    const int live_fsr1 = SotcLive::fsr1.load(std::memory_order_relaxed);
-    const int live_dlss = SotcLive::dlss.load(std::memory_order_relaxed);
-    const bool fsr1_on = (live_fsr1 >= 0 ? live_fsr1 : env_fsr1) != 0;
-    int up_mode = 2;
-    if (live_dlss == 1 || (live_dlss < 0 && dlss_ready)) {
-        up_mode = 0;
-    } else if (fsr1_on) {
-        up_mode = 1;
-    }
+    const auto requested_upscaler = SotcLive::GetUpscaler();
+    const bool fsr1_on = SotcLive::UsesFsr1(requested_upscaler);
+    const int up_mode = requested_upscaler == SotcLive::Upscaler::Dlss && dlss_ready
+                           ? 0 : fsr1_on ? 1 : 2;
     const char* up_names[] = {T("DLSS (NVIDIA RTX)", "DLSS (NVIDIA RTX)"),
                               T("FSR 1 (AMD, qualquer placa)", "FSR 1 (AMD, any GPU)"),
                               T("Bilinear (simples)", "Bilinear (plain)")};
     if (ImGui::BeginCombo("Upscaler", up_names[up_mode])) {
         for (int i = dlss_ready ? 0 : 1; i < 3; ++i) {
-            if (ImGui::Selectable(up_names[i], i == up_mode) && i != up_mode) {
+            if (ImGui::Selectable(up_names[i], i == up_mode) &&
+                i != static_cast<int>(requested_upscaler)) {
                 SetUpscaler(i);
             }
         }
@@ -460,7 +451,7 @@ void QuickSettings() {
         }
         ImGui::EndCombo();
     }
-    if (!fsr1_on && !dlss_ready) {
+    if (!fsr1_on) {
         Hint(T("A nitidez vale com o FSR 1 ou o DLSS.", "Sharpening applies with FSR 1 or DLSS."));
     } else if (up_mode == 0) {
         Hint(T("DLSS: em 1080p é DLAA; com o jogo desenhando abaixo da saída é Super Resolution.",

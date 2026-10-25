@@ -1,6 +1,11 @@
-# Shadow of the Colossus — PC native port · v0.61
+# Shadow of the Colossus — PC native port · v0.63 (preview)
 
 [Releases](../../releases) · [Changelog](CHANGELOG.md)
+
+**v0.63 is a prerelease of this fork.** It includes the v0.62 shader backports and the review
+fixes listed below; Windows/RTX gameplay and image quality still need testing. Download previews
+manually from Releases: the launcher's updater follows this fork's stable releases, not previews
+or upstream releases. Keep a backup of `user/` and `sotc.ini` when moving to a new directory.
 
 > **No game or Sony files are included.** You need your own game dump and, for sound, two
 > modules from your own console. This project is not affiliated with Sony Interactive
@@ -20,6 +25,8 @@ game needs, in the style of [bloodborne_pc](https://github.com/Supermedo/bloodbo
 
 | Version | Improvements and fixes |
 |---|---|
+| **0.63 (preview)** | **Safer self-updates** with protected saves/settings and retained recovery backups; persistent **DLSS / FSR 1 / Bilinear** selection in both menus, corrected DLSS sharpening and history reset; reliable preparation cache/update overlays; clean-checkout packaging and Linux/Windows regression checks. |
+| **0.62 (preview)** | **DLSS in the F1 menu**, ten upstream shader/recompiler fixes, and NGX shutdown before Vulkan device destruction. Shader cache version 38: upgrading from 0.61 rebuilds the cache on first start. |
 | **0.61** | **DLSS Super Resolution (RTX 20 and newer)**: the package now ships this project's MIT `sotc_dlss.dll` bridge and NVIDIA's `nvngx_dlss.dll`; with an RTX card DLSS replaces FSR 1 automatically — **DLAA** at native size, **Super Resolution** when the game renders below the output size. Windows builds are produced by GitHub Actions. |
 | **0.60.6** | **No more rainbow garbage on textures and far fewer "closed out of nowhere" crashes** (the cause: speculative GPU readbacks written over memory the game had reused, after loading a save or a new area), **no more black dots on sandy ground**, **in-game menu cleaned up** (FPS, upscaler and sharpening now change at once; Bloodborne leftovers removed), **hard disk read-ahead** (fewer stalls in new areas on HDDs), textures refreshed on every load, a readable session event log (`user/events.log`). |
 | **0.60.5** | **Texture quality selector: Off / High / Maximum** (#235: sharp again), **memory leak fixed** (~60 MB/min, long-session stutter), **+3% average and +12% minimum FPS** (descriptor binds reused), **loading after a GPU driver update: 106 s → 7 s**, possible fix for **white characters on AMD GCN** (RX 470–590, Vega), **4-thread CPUs** no longer stuck loading, a hang watchdog, short hitches no longer flash a black loading screen, code review fixes. |
@@ -80,6 +87,13 @@ without a G-buffer draw (movies, menus, loading screens) keep FSR 1 for that fra
 cut resets the DLSS history automatically. The HUD is part of the upscaled image, exactly as
 with FSR 1. The first frame prints `SOTC DLSS: ready`; without the DLLs or on another GPU
 everything works as before with FSR 1.
+
+The launcher and the in-game menu both keep the **DLSS / FSR 1 / Bilinear** choice for the next
+start. New installations prefer DLSS with FSR 1 fallback; an existing FSR 1 or Bilinear choice
+is preserved. `SOTC_UPSCALER=fsr1` or `SOTC_UPSCALER=bilinear` selects a different mode without
+disabling the DLSS bridge, so it can still be selected in the in-game menu. `SOTC_DLSS=0`
+disables the bridge for the whole session. Returning to DLSS after skipped frames resets its
+history.
 
 To render below the output size, put both lines in `sotc.ini` (or the environment):
 
@@ -171,6 +185,21 @@ bash packaging/windows/package_sotc.sh     # dist/SotC-PC.zip
 
 Packaging refuses any `.sprx`/`.prx`: Sony firmware never goes into the package. Test tools:
 `tools/`. Diagnostic variables: [docs/sotc/README-SotC.md](docs/sotc/README-SotC.md).
+
+### Regression tests
+
+```bash
+python -m unittest discover -s tests -v
+mkdir -p out
+g++ -std=c++20 -O2 -Wall -Wextra -Werror -I. tests/test_sotc_live.cpp -o out/sotc-live-test
+out/sotc-live-test
+```
+
+The standalone C++ test needs no GPU or game dump. Python tests that need a native binary are
+reported as skipped until that binary is built. CI runs the Python suite on Linux, the launcher,
+updater and preparation tests on Windows, and the live-settings test on both build paths.
+Current native-test gaps and Windows verification steps are recorded in the
+[review notes](docs/sotc/REVIEW-2026-10-25.md).
 
 ## Credits
 
