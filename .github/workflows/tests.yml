@@ -88,12 +88,12 @@ jobs:
             gpu/shim/common/logging/log.cpp -lfmt -o out/recorded-external-test
           timeout 30s out/recorded-external-test
 
-      - name: Loading state and CPU telemetry (no GPU)
+      - name: Loading state, CPU telemetry and CE/DE guards (no GPU)
         if: runner.os == 'Linux'
         shell: bash
         run: |
           set -euo pipefail
-          for test in overlay_frame_state cpu_usage; do
+          for test in overlay_frame_state cpu_usage ce_de_sync; do
             g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread -I. tests/test_${test}.cpp -o out/${test}-test
             timeout 30s out/${test}-test
           done

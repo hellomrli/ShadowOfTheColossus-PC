@@ -22,6 +22,7 @@
 #include "core/libraries/videoout/driver.h"
 #include "core/memory.h"
 #include "core/platform.h"
+#include "video_core/amdgpu/ce_de_sync.h"
 #include "video_core/amdgpu/liverpool.h"
 #include "video_core/amdgpu/pm4_cmds.h"
 #include "video_core/host_cpu_usage.h"
@@ -671,7 +672,8 @@ Liverpool::Task Liverpool::ProcessCeUpdate(std::span<const u32> ccb) {
         }
         case PM4ItOpcode::WaitOnDeCounterDiff: {
             const auto diff = it_body[0];
-            while ((cblock.de_count - cblock.ce_count) >= diff) {
+            // sotc: #5406, compare CE's lead without unsigned subtraction underflow.
+            while (CeDeSync::WaitForDe(cblock.ce_count, cblock.de_count, diff)) {
                 YIELD_CE();
             }
             break;
@@ -1377,7 +1379,8 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
                 break;
             }
             case PM4ItOpcode::WaitOnCeCounter: {
-                while (cblock.ce_count <= cblock.de_count && !ce_task.handle.done()) {
+                // sotc: #5406, a submission without a CCB has no CE coroutine.
+                while (CeDeSync::ResumeCe(cblock.ce_count, cblock.de_count, ce_task.handle)) {
                     RESUME_GFX(ce_task);
                 }
                 break;

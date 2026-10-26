@@ -300,7 +300,7 @@ if (WIN32)
 endif()
 
 # Explicit test targets; neither launches the game nor needs a Vulkan device.
-foreach(test IN ITEMS overlay-frame-state cpu-usage)
+foreach(test IN ITEMS overlay-frame-state cpu-usage ce-de-sync)
     string(REPLACE "-" "_" source "${test}")
     add_executable(${test}-test EXCLUDE_FROM_ALL ../tests/test_${source}.cpp)
     target_compile_options(${test}-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
