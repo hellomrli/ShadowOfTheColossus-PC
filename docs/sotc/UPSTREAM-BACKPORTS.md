@@ -6,7 +6,21 @@ A revisao original cobriu `b4e7ae7..12a45645`, ate 2026-10-24: 98 commits que to
 `shader_recompiler` ou `video_core`.
 
 **Revisao atualizada de estabilidade/CPU:** [2026-10-26](UPSTREAM-REVIEW-2026-10-26.md),
-fixada no upstream `2cdefaa1`. A nova revisao nao aplica codigo ao pacote v0.66.
+fixada no upstream `2cdefaa1`. A auditoria inicial nao alterou o pacote v0.66; a v0.67
+integra as tres correcoes abaixo, sem substituir a base vendorizada.
+
+## Aplicados na v0.67
+
+| Upstream | Correcao | Adaptacao local |
+|---|---|---|
+| `e6c79a5f` (#5406) | Guardas CE/DE | Diferenca CE-DE somente quando CE >= DE; handle CE valido antes de done(). Sem fila global ou mudanca de lifetime. Commit `b8284e8`. |
+| `699009c9` (#5444) | Nao copiar conteudo antigo CPU-dirty em ExpandImage | GPU-modified e nenhum Dirty, capturado antes do refresh. CopyImage local ja propaga flags. Commit `b1d472e`. |
+| `a7d0fe3f` (#5435) | Timer Windows reutilizado por thread | RAII, alta resolucao/fallback, falhas bloqueantes e protecao de reentrada em APC. O runtime C nao muda. Commit `5d4badc`. |
+
+Testes portaveis com ASan/UBSan cobrem os helpers usados em producao. O CI Windows inclui
+timer/APC reais e contagem de handles apos saida de threads. Nao sao testes de gameplay
+nem do cache de texturas Vulkan completo. A versao do cache de shaders continua **38**;
+DLSS/FSR 3, protecoes de memoria e `SOTC_CP_FREE_TASKS` nao mudam.
 
 ## Aplicados na v0.62
 
@@ -45,9 +59,10 @@ Commits locais que aplicaram os dez backports: `7a33f1b`, `e755f96`, `5e902e1`,
 
 ## Pendencias reais
 
-A [revisao de 2026-10-26](UPSTREAM-REVIEW-2026-10-26.md) prioriza os guardas CE/DE,
-o timer Windows e a preservacao de dados validos em ExpandImage. Tambem separa mudancas
-menores de refatoracoes que exigem adaptacao ao draw thread/recorder do port.
+Os guardas CE/DE, o timer Windows e a preservacao de dados validos em ExpandImage ja foram
+integrados na v0.67. A [revisao de 2026-10-26](UPSTREAM-REVIEW-2026-10-26.md) separa os
+proximos candidatos (#5433, #5277, #5446) que ainda exigem adaptacao ao cache, draw thread
+e recorder do port; nao sao parte destes tres backports.
 
 Continuam exigindo avaliacao especifica: layout de mips tiled (`7e778987`), associacao
 color/stencil (`fecfbed0`), stencil-only (`626f3ace`), copias D32/D32S8 (`92c7a884`), copias

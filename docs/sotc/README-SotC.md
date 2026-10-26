@@ -7,9 +7,10 @@ shadPS4 SotC. A base é o [bloodborne_pc](https://github.com/Supermedo/bloodborn
 
 Este pacote **não contém o jogo nem firmware da Sony**. Você precisa ter os seus.
 
-**0.66 (pre-release):** primeira etapa de estabilidade/CPU: espera por eventos no gravador,
-liberação completa da fila, registro correto de carregamento e uso real de CPU por thread.
-O jogador pode manter FSR 1 + FSR 3; isso não promete estabilidade de todo o jogo.
+**0.67 (pre-release):** três correções adaptadas do shadPS4: guardas nas esperas CE/DE,
+preservação de texturas novas na expansão e reutilização de timers Windows por thread.
+Mantém as melhorias do gravador e a medição real de CPU da 0.66.
+O jogador pode manter FSR 1 + FSR 3; isso não promete estabilidade de todo o jogo nem ganho de FPS.
 Previews são baixadas manualmente, sem mudar o canal estável.
 
 ## Requisitos
@@ -160,6 +161,10 @@ Para testar, mantenha FSR 1 + FSR 3 e suas outras opções, carregue saves, troq
 salve/recarregue e saia. Envie o log com `[CPU]`/`[PERF]` e os sintomas, ou o dump se cair.
 Não desative proteções de memória nem force patches de outra versão.
 Detalhes em `docs/sotc/STABILITY-CPU-2026-10-25.md`, incluído neste pacote.
+As três correções da 0.67 não mudam DLSS/FSR 3, o cache de shaders nem as proteções de memória.
+A origem e os limites da integração estão em `docs/sotc/UPSTREAM-REVIEW-2026-10-26.md` e
+`docs/sotc/UPSTREAM-BACKPORTS.md`, também incluídos. O timer atua no pacing de videoout;
+CPU total baixo não deve ser tratado aumentando artificialmente a ocupação dos núcleos.
 
 ### Queda no driver NVIDIA ao iniciar (RTX 3070)
 

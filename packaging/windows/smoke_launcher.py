@@ -17,7 +17,8 @@ def main():
                  'bin/sotc_dlss.dll', 'bin/nvngx_dlss.dll', 'bin/licenses-nvidia/LICENSE.txt',
                  'sotc.py', 'scripts/prepare.py', 'launcher/window_icon.ico',
                  'docs/sotc/CRASH-NVIDIA-2026-10-25.md', 'docs/sotc/DLSS.md',
-                 'docs/sotc/STABILITY-CPU-2026-10-25.md'):
+                 'docs/sotc/STABILITY-CPU-2026-10-25.md',
+                 'docs/sotc/UPSTREAM-REVIEW-2026-10-26.md', 'docs/sotc/UPSTREAM-BACKPORTS.md'):
         assert (port / name).is_file(), f'package missing {name}'
     assert sotc_update.RELEASES_URL == (
         'https://api.github.com/repos/hellomrli/ShadowOfTheColossus-PC/releases/latest')

@@ -16,11 +16,38 @@ Ha **9 commits novos** desde o limite da revisao anterior. A lista de commits qu
 conferidos os nove novos commits e reexaminados candidatos anteriores nas areas de espera,
 sincronizacao e vida dos recursos; isso nao e uma auditoria integral de todos os subsistemas.
 
-**Esta etapa e somente uma revisao de codigo e documentacao. Nenhum backport novo foi
-aplicado ao runtime, shaders ou pacote v0.66.** Nao houve benchmark de jogo nem teste com GPU.
-As dez correcoes ja absorvidas na v0.62 constam de [UPSTREAM-BACKPORTS.md](UPSTREAM-BACKPORTS.md).
+**A auditoria inicial foi somente uma revisao de codigo e documentacao; o pacote v0.66
+nao foi alterado. Depois dela, a v0.67 adaptou as tres correcoes de prioridade alta.**
+O diagnostico e as propostas abaixo descrevem o estado da v0.66, nao novas pendencias da
+v0.67. Nao houve benchmark de jogo nem teste com GPU. As dez correcoes da v0.62 e as tres
+novas constam de [UPSTREAM-BACKPORTS.md](UPSTREAM-BACKPORTS.md).
 
-## Prioridade alta: correcoes pequenas ainda ausentes
+## Integracao posterior: v0.67
+
+| Upstream | Commit local | Adaptacao |
+|---|---|---|
+| #5406 `e6c79a5f` | `b8284e8` | `ce_de_sync.h` concentra os dois guardas usados pelo Liverpool. Nao muda contadores, fila global, resets nem liberacao de coroutines. |
+| #5444 `699009c9` | `b1d472e` | `image_content.h` compartilha o predicado ja usado por SafeToDownload e a ordem refresh/copy. Captura a validade antes do refresh; CopyImage local continua responsavel pelas flags. |
+| #5435 `a7d0fe3f` | `5d4badc` | `sleep_timer.h` e `win32_sleep_timer.h` reutilizam o timer por thread. Acrescentam fallback bloqueante para falhas, tempo restante monotono e handle separado para espera reentrante em APC. |
+
+Os tres testes portaveis passaram localmente com `-Wall -Wextra -Werror` e ASan/UBSan:
+
+- `test_ce_de_sync.cpp`: limites unsigned, handle ausente/concluido e coroutines pequenas
+  com espera aninhada/retomada. Nao executa o Liverpool completo nem buffers PM4 do jogo.
+- `test_image_expansion.cpp`: combinacoes de flags, preservacao de mips e ordem de comandos
+  adiados com callbacks em memoria. O ramo sem upload de MSAA e modelado; nao ha validacao
+  de pixels MSAA/Vulkan, rebinding ou lifetime de imagens no driver.
+- `test_sleep_timer.cpp`: reutilizacao, fallback sem alta resolucao, falhas de criar/armar/
+  esperar, limites de duracao, interrupcao/reentrada e encerramento TLS. O build Windows
+  executa tambem timers reais, APC aninhada e verificacao de handles apos 32 threads.
+
+O build Windows e a auditoria do pacote sao exigidos antes de publicar a pre-release;
+os resultados ficam nas notas da release. DLSS/FSR 3, cache de shaders 38, GC2, protecoes
+e `SOTC_CP_FREE_TASKS` permanecem inalterados. Streaming/save/load e ganhos de CPU/FPS
+continuam dependendo de teste controlado no PC do jogador, conforme o
+[guia de estabilidade/CPU](STABILITY-CPU-2026-10-25.md).
+
+## Diagnostico na v0.66: tres correcoes de prioridade alta
 
 ### 1. Contadores CE/DE: evitar acesso nulo e espera incorreta
 

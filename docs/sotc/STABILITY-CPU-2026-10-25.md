@@ -1,4 +1,4 @@
-# Estabilidade e CPU: primeira etapa (0.66 preview)
+# Estabilidade e CPU: etapas 0.66 e 0.67 (preview)
 
 ## Prioridade e evidencia
 
@@ -13,7 +13,7 @@ Isso nao mede CPU nem prova vazamento ou deadlock. Avisos de event flag registra
 por eventos; os guardas de stack evitam proteger/sobrescrever pilhas guest. Nao foram removidos
 para esconder o log. Nao se deve forcar patches EU quando o executavel nao e verificado.
 
-## Correcoes desta etapa
+## Correcoes da 0.66
 
 - **Polling ocioso:** o timeout de 500 us do gravador podia virar zero no Windows. Depois
   do spin curto, a thread agora espera notificacao de trabalho ou shutdown. Publicacoes
@@ -35,6 +35,25 @@ zero nas menores. `SOTC_REC_SPIN_US=0` permite um controle separado sem spin. O 
 `SOTC_REC_SLEEP_US` agora e espera por evento (ausente, zero ou negativo). Um valor positivo
 seleciona espera temporizada, arredondada para cima a um milissegundo, no intervalo 1..1000 ms.
 Mesmo a espera temporizada acorda quando chega uma notificacao; nao e um sleep fixo por frame.
+
+## Backports da 0.67
+
+A [revisao de 2026-10-26](UPSTREAM-REVIEW-2026-10-26.md) foi fixada no upstream oficial
+`2cdefaa1`. Tres correcoes foram adaptadas, sem substituir o renderer inteiro:
+
+- **#5406, CE/DE:** direcao e limite da diferenca dos contadores, e verificacao do handle CE
+  antes de consultar/retomar a coroutine. Nao muda a fila CE nem libera tasks aninhadas.
+- **#5444, expansao de textura:** so copia a origem se ela tem conteudo GPU valido e nenhum
+  bit Dirty. Isso impede que a copia antiga sobrescreva o upload novo; mantem as regras
+  locais de flags, rebinding, rastreamento e liberacao adiada.
+- **#5435, timer Windows:** reutiliza o handle por thread, com alta resolucao quando
+  disponivel. Falhas usam espera bloqueante; interrupcao/APC e chamadas reentrantes nao
+  reutilizam um handle ainda em espera. O timer e fechado na saida da thread.
+
+O terceiro item atua no `AccurateTimer` do videoout. O runtime C ja tinha outro cache de
+timer; nao e uma otimizacao nova de todas as threads guest. Reduzir trabalho redundante
+nao implica maior utilizacao total da CPU ou mais FPS. DLSS/FSR 3, limites de FPS, protecoes
+de stack/memoria, GC2 e a versao de cache de shaders 38 permanecem inalterados.
 
 ## Interpretar a linha CPU
 
@@ -61,6 +80,8 @@ Exemplo ilustrativo, nao medido no jogo:
    Nao altere driver, cache, memoria e varios switches de uma vez.
 2. Faca uma sessao normal de 10-15 minutos: carregar save, caminhar, transitar de area,
    salvar/recarregar e sair. Preserve o log inteiro; uma queda tambem precisa do dump correspondente.
+   Observe texturas depois das trocas de area; se estiver normal, repita por pelo menos
+   30 minutos para ampliar a amostra. Isso ainda nao e um teste do jogo inteiro.
 3. Compare o mesmo trecho com o mesmo limite de FPS. Se quiser medir desempenho sem limite,
    faca uma amostra separada e anote o uso de F7; nao compare uma janela limitada com outra livre.
 4. Envie as linhas `[CPU]` / `[PERF]` e descreva travadas, imagem congelada ou audio interrompido.
@@ -75,6 +96,13 @@ spin/park, `Kick`, lote, End de chunk e shutdown ocioso. ASan/UBSan com deteccao
 cobre a fila. Testes separados verificam loading sem UI/hotkey e clocks reais/sinteticos de
 CPU, inclusive encerramento da thread durante a amostragem. O teste ocioso imprime consumo
 de uma CPU logica sem usar GPU; esse numero nao e um ganho de FPS do jogo.
+
+Na 0.67, os testes usam os mesmos helpers do runtime: contadores/handle CE com coroutines
+pequenas (nao o processador PM4 completo), e a politica de expansao com callbacks de upload/copy
+em memoria (nao renderizacao Vulkan/MSAA). O backend de timer recebe falhas simuladas e testa
+APC reentrante, limites e TLS. O teste Windows usa ainda timers reais, QueueUserAPC e contagem
+de handles apos encerrar threads. ASan/UBSan cobre os tres testes portaveis, nao o driver Windows.
+Os resultados do build e da auditoria do ZIP ficam nas notas da pre-release correspondente.
 
 Build Windows, testes sem GPU e auditoria do pacote nao comprovam estabilidade do jogo
 inteiro. Sem um dump local e GPU de teste, a proxima etapa depende dos logs/trechos reproduziveis

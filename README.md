@@ -1,17 +1,19 @@
-# Shadow of the Colossus — PC native port · v0.66 (preview)
+# Shadow of the Colossus — PC native port · v0.67 (preview)
 
 [Releases](../../releases) · [Changelog](CHANGELOG.md)
 
-**v0.66 is a prerelease of this fork, focused on stability and CPU efficiency.** It parks the
-idle command recorder on notifications, fixes its final-chunk leak and delayed loading-screen
-logs, and reports real process/thread CPU time once a minute. The user's 0.65 RTX 3070 run
-created DLSS successfully and exited normally; 0.66 gameplay and performance still need testing. Download previews
+**v0.67 is a prerelease of this fork, focused on stability and CPU efficiency.** It adapts
+three shadPS4 fixes: CE/DE wait guards, fresh texture preservation during expansion, and
+per-thread Windows sleep timers. It keeps 0.66's event-driven recorder and actual CPU telemetry.
+FSR 1 + FSR 3 settings and DLSS are unchanged; gameplay stability and CPU/FPS gains still need testing. Download previews
 manually from Releases: the launcher's updater follows this fork's stable releases, not previews
 or upstream releases. Keep a backup of `user/` and `sotc.ini` when moving to a new directory.
 
-**A v0.66 e uma pre-release deste fork, com foco em estabilidade e CPU.** Corrige polling
-ocioso, liberacao da fila e registro de carregamento; mede o uso real das threads.
-E a primeira etapa, nao uma garantia de estabilidade de todo o jogo. [Plano e verificacao](docs/sotc/STABILITY-CPU-2026-10-25.md).
+**A v0.67 e uma pre-release deste fork, com foco em estabilidade e CPU.** Adapta tres
+correcoes do shadPS4: esperas CE/DE, preservacao de texturas novas e timers Windows por thread.
+Mantem FSR 1 + FSR 3 e as protecoes locais; nao garante estabilidade de todo o jogo nem ganho
+de FPS. [Plano e verificacao](docs/sotc/STABILITY-CPU-2026-10-25.md) e
+[revisao do upstream](docs/sotc/UPSTREAM-REVIEW-2026-10-26.md).
 
 > **No game or Sony files are included.** You need your own game dump and, for sound, two
 > modules from your own console. This project is not affiliated with Sony Interactive
@@ -31,6 +33,7 @@ game needs, in the style of [bloodborne_pc](https://github.com/Supermedo/bloodbo
 
 | Version | Improvements and fixes |
 |---|---|
+| **0.67 (preview)** | Three focused shadPS4 backports: **CE/DE wait guards** (#5406), **no stale texture overwrite during expansion** (#5444), and **reused Windows high-resolution timers** (#5435) with failure fallback and APC reentry protection. No shader-cache, DLSS/FSR 3 or memory-protection changes. |
 | **0.66 (preview)** | **Event-driven idle recorder**, chunk-boundary wakeup and final-chunk cleanup; **actual process/thread CPU telemetry**, immediate loading-dismissal logs and atomic dialog flags. No-GPU wakeup, lifetime and UI-state tests. Stability/CPU first; no new DLSS features or shader-cache changes. |
 | **0.65 (preview)** | **Real Vulkan command buffers for DLSS**, with ordered creation/evaluation on the recording thread and synchronous fallback results; NGX crash-context labels, balanced debug labels on failure and a no-GPU regression using the production recorder. A later RTX 3070 run created DLAA and exited normally; no renderer-default or shader-cache changes. |
 | **0.64 (preview)** | **Verify the actual executable before fixed-address CPU patches**, including update selection in the launcher; reject malformed/truncated cache blobs and publish only complete writes; **native Windows crash stacks and active Vulkan operation/shader context**. RTX 3070 driver-crash investigation remains open; no shader-output or renderer-default changes. |
@@ -225,6 +228,10 @@ executables, not game or firmware files.
 Recorder tests also check event-driven wakeups and idle shutdown; separate tests cover
 loading-state transitions and real OS CPU clocks/thread lifetime. See the
 [stability/CPU verification guide](docs/sotc/STABILITY-CPU-2026-10-25.md).
+The 0.67 tests exercise the shared CE/DE guards with small coroutines, the texture expansion
+policy with software upload/copy callbacks, and the timer backend with injected failures.
+The Windows build also runs real waitable timers, nested APC sleeps and thread-exit handle
+checks. These tests do not run the full PM4 processor or validate Vulkan texture rendering.
 Current native-test gaps and Windows verification steps are recorded in the
 [review notes](docs/sotc/REVIEW-2026-10-25.md).
 

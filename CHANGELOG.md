@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.67 (pre-release) — 2026-10-26
+- **Tres backports de estabilidade/CPU:** revisao fixada no shadPS4 oficial
+  `2cdefaa1298c6e4ece6c74bd84e90f3906282d51`. Integracao pequena, em commits separados;
+  nao e uma substituicao do nucleo de video pelo upstream inteiro.
+- **Esperas CE/DE (#5406):** corrige a direcao da diferenca sem sinal e verifica CE >= DE
+  antes de subtrair; nao consulta `done()` sem coroutine CE valida. Mantem a fila, os resets
+  e a politica local de lifetime; nao habilita liberacao de coroutines.
+- **Texturas expandidas (#5444):** preserva a origem apenas se ela tem dados GPU-modified
+  sem nenhum bit Dirty. Uma textura antiga CPU-dirty nao pode mais sobrescrever o upload
+  novo depois de reutilizacao da memoria guest. O caminho local de copia ja propaga as
+  flags; rebinding, rastreamento e liberacao adiada permanecem como antes.
+- **Timers Windows (#5435):** `AccurateSleep` reutiliza um timer de alta resolucao por
+  thread, com fallback comum e fechamento na saida. Falhas de criacao/armamento/espera
+  usam espera bloqueante; APC descarta o timer interrompido e uma espera reentrante usa
+  seu proprio handle. Zero/negativo apenas cedem a CPU; intervalos sub-100 ns nao viram
+  datas absolutas. Atua no pacing de videoout, nao aumenta workers nem spin.
+- **Regressoes:** guardas CE/DE com coroutines pequenas; matriz de dirty/modified e ordem
+  upload/copy em modelo de textura; backend de timer com falhas injetadas e lifetime TLS.
+  ASan/UBSan nos tres testes locais. O build Windows executa tambem timers/APC reais e
+  verifica handles apos encerrar threads. Sem GPU/jogo nesses testes: nao comprovam
+  estabilidade integral, renderizacao MSAA ou aumento de FPS.
+- **Sem mudancas de DLSS/FSR 3, protecoes de memoria ou cache de shaders (38).** GC2,
+  fila CE global e refatoracao do rastreador de paginas ficam separados. O guia de
+  estabilidade/CPU, a revisao e o inventario de backports acompanham o pacote. Manter
+  FSR 1 + FSR 3 e comparar saves/areas com a mesma configuracao e limite de FPS.
+
 ## 0.66 (pre-release) — 2026-10-25
 - **Estabilidade/CPU, primeira etapa:** o gravador mantem o spin curto, mas depois espera
   uma notificacao em vez de repetir um timeout de 500 us que virava zero no Windows.
