@@ -1,74 +1,71 @@
-# Upstream shadPS4 review after b4e7ae7
+# Backports do shadPS4 depois de b4e7ae7
 
-The port vendors shadPS4 at `b4e7ae776071ceb1dd35004577a8719481e1d258` (2026-10-02). This file
-tracks what was reviewed from `b4e7ae7..12a45645` (2026-10-24, 98 commits touching
-`shader_recompiler`/`video_core`) and what was actually taken.
+Base vendorizada: `b4e7ae776071ceb1dd35004577a8719481e1d258`, commit de 2026-09-24
+(a versao anterior deste documento confundia a data anotada de 2026-10-02 com a do commit).
+A revisao original cobriu `b4e7ae7..12a45645`, ate 2026-10-24: 98 commits que tocam
+`shader_recompiler` ou `video_core`.
 
-## Taken (branch `next/upstream-backports`)
+**Revisao atualizada de estabilidade/CPU:** [2026-10-26](UPSTREAM-REVIEW-2026-10-26.md),
+fixada no upstream `2cdefaa1`. A nova revisao nao aplica codigo ao pacote v0.66.
 
-| Upstream | What | Why |
+## Aplicados na v0.62
+
+Estes dez backports ja estao no historico de `main`; nao sao candidatos pendentes.
+
+| Upstream | Correcao | Motivo |
 |---|---|---|
-| `524be7c1` | Exclude `GetUserData` from phi folding | User data is a runtime value; folding it into a constant breaks shaders that read different user data on different paths. SotC's SRT walkers read user data heavily. |
-| `78bedfac` | Preserve CFG fallthrough edges (`block.cond = True`, skip break/return/unreachable in `TryFindForwardBlock`, `AddBranch` on the next code block) | SotC already had the `block.cond` line but not the other two. Without them a fallthrough edge could be dropped, producing a shader that skips code. |
-| `f0ea8eb7` | `S_GETREG_B32` / `HW_ID.SE_ID` as virtual shader engine 0 | The opcode was known but had no translator: any shader reading the shader-engine id hit `UNREACHABLE`. SotC's SRT walkers and culling shaders are exactly the kind of code that reads it. |
-| `c34ca21f` | Preserve EXEC scope after an empty branch | One line in `SplitDivergenceScopes`: an empty scope must still open EXEC masking for the next instruction when it is an open-scope one. |
-| `603cff43` | Stable phi deduplication order | The worklist was built from `unordered_map` iteration order, so the same shader could produce different IR between runs. |
-| `1c2b8f97` | Proper `V_RCP_CLAMP_F32`, `V_RSQ_CLAMP_F32`, `V_RSQ_LEGACY_F32`, `V_LOG_CLAMP_F32` | SotC mapped all four to the non-clamped instructions, so results could be `inf`/`NaN` where GCN clamps. (The `V_CVT_PK_U8_F32` part was already backported.) |
-| `b08fd9bb` | Detect fp64 use from the instruction types | Only `PackDouble2x32`/`UnpackDouble2x32` were checked; a shader whose first fp64 instruction was e.g. `FPAdd64` could be compiled without fp64 support. |
-| `6752d8b1` | `BUFFER_WBINVL1` / `BUFFER_WBINVL1_SC` | The format table described them as 4-operand instructions and the translator had no case, so a shader using a cache invalidation hit `UNREACHABLE`. They take no operands and lower to the device memory barrier. |
+| `524be7c1` (#5427) | Excluir `GetUserData` do folding de Phi | User data e um valor de runtime; nao pode ser tratado como constante entre caminhos. |
+| `78bedfac` (#5365) | Preservar arestas de fallthrough no CFG | O port ja tinha `block.cond = True`, mas faltavam o tratamento de break/return/unreachable e `AddBranch` no proximo bloco. |
+| `f0ea8eb7` (#5459) | `S_GETREG_B32` / `HW_ID.SE_ID` | Retornar shader engine virtual 0 em vez de atingir `UNREACHABLE` por falta de traducao. |
+| `c34ca21f` (#5220) | Preservar escopo EXEC depois de ramo vazio | Um escopo vazio ainda deve abrir a mascara EXEC quando a proxima instrucao exige isso. |
+| `603cff43` (#5364) | Ordem estavel de deduplicacao de Phi | Evitar que a iteracao de `unordered_map` produza IR diferente entre execucoes. |
+| `1c2b8f97` (#5346) | Clamp de RCP/RSQ/LOG | Respeitar limites GCN em vez de mapear variantes clamp para instrucoes comuns. A parte `V_CVT_PK_U8_F32` ja existia. |
+| `b08fd9bb` (#5342) | Detectar fp64 pelos tipos das instrucoes | Nao depender apenas de PackDouble/UnpackDouble para habilitar suporte a double. |
+| `6752d8b1` (#5447) | `BUFFER_WBINVL1` / `BUFFER_WBINVL1_SC` | Corrigir formato sem operandos e emitir barreira de memoria do device. |
+| `c1b26558` (#5468) | `has_derivatives` inclui `CoarseDerivative` | Reconhecer tambem o modificador coarse na coleta de informacoes do shader. |
+| `5ae2caf3` (#5203) | Coordenadas de atomicas em imagem 1D | Usar os componentes corretos em `OpImageTexelPointer` conforme o tipo da imagem. |
 
-`ShaderBinaryVersion` 33 → 37 (all of the above change shader output; the cache is rebuilt on
-first start). Also SotC-local: `Instance::~Instance` now calls `Dlss::Shutdown()` before the
-device is destroyed (the `atexit` handler used to run after it).
+`ShaderBinaryVersion` passou de 33 para **38**, nao 37, contando os dois ultimos backports.
+A recompilacao foi introduzida na v0.62; esta atualizacao de documentacao nao invalida cache.
+Tambem houve a correcao local de chamar `Dlss::Shutdown()` antes de destruir o device,
+documentada separadamente no historico da v0.62.
 
-## Already present in SotC (no action)
+Commits locais que aplicaram os dez backports: `7a33f1b`, `e755f96`, `5e902e1`,
+`1b6b07d` e `be7c546`. Outros backports anteriores estao em `gpu/VENDOR.txt`.
 
-| Upstream | Where |
+## Ja presente ou tratado por um caminho local
+
+| Upstream | Situacao no SotC |
 |---|---|
-| `c01ae7e6` page_manager fault probe limited to the faulting page | `page_manager.cpp` `HandleGuestFault`: `size = min(8, GetNextPageAddr(addr) - addr)`. |
-| `eedf851a` texture cache drops images whose untracked edges the guest overwrote | `texture_cache.cpp` marks `MaybeCpuDirty` in `UntrackImageHead/Tail`; `SafeToDownload()` refuses dirty images, and `RefreshImage` hashes the first texels. Same intent, delayed hashing. |
-| `78bedfac` first hunk (`block.cond`) | `control_flow_graph.cpp:362`. |
-| `bcf083f0` clamp tracked page end to 40 bits | `page_manager.cpp` `EnsurePages`: `end = min(end, 1 << 40) - 1`. |
-| `fb6367d2` 32-bit literals in high dword, `dd43d1ca` `V_CVT_PK_U8_F32`, `94e21778` `V_BFM_B32`, `ef08b1e1` `V_ALIGNBIT`, `d1cb90db` `ADDC`, `2335629` `V_INTERP_MOV_F32`, `d96278e` compute FP mode, `e518a65` `S_SUBB_U32` | Listed in `gpu/VENDOR.txt` (backported before this review). |
+| `c01ae7e6` (#5150), probe limitado a pagina da falta | `PageManager::HandleGuestFault` limita o acesso a `min(8, GetNextPageAddr(addr) - addr)`. |
+| `bcf083f0` (#5151), fim das paginas limitado a 40 bits | `PageManager::EnsurePages` limita o fim a `1 << 40`. |
+| `41f2a428` (#5113), callback antes de EndSession | O scheduler local ja executa `on_submit` antes de `EndSession`. |
+| `eedf851a` (#5450), bordas nao rastreadas sobrescritas pelo guest | Objetivo parcialmente tratado: UntrackImageHead/Tail marcam MaybeCpuDirty; SafeToDownload recusa Dirty; RefreshImage usa hash adiado dos primeiros texels. Nao e equivalencia integral com o hashing de bordas do upstream, nem prova de que todos os casos estejam cobertos. |
+| Backports anteriores de V_INTERP_MOV, modo FP compute, S_SUBB/S_ADDC, literais fp64, V_BFM, ADDC, V_CVT_PK_U8 e V_ALIGNBIT | Registrados em `gpu/VENDOR.txt`; nao reaplicar como novidade. |
 
-## Candidates left for later (not taken now)
+## Pendencias reais
 
-These are real fixes but either touch code SotC has heavily rewritten or change behavior that
-cannot be verified without a Windows run. They are listed so the next pass does not re-review
-them:
+A [revisao de 2026-10-26](UPSTREAM-REVIEW-2026-10-26.md) prioriza os guardas CE/DE,
+o timer Windows e a preservacao de dados validos em ExpandImage. Tambem separa mudancas
+menores de refatoracoes que exigem adaptacao ao draw thread/recorder do port.
 
-- `f0ea8eb7` `HW_ID.SE_ID` reads; `6752d8b1` buffer cache invalidation instructions;
-  `08225c2b` LDS barrier singleton dimensions; `c1b26558` `has_derivatives` with
-  `CoarseDerivative`; `603cff43` deterministic phi dedup; `c34ca21f` EXEC scope after an empty
-  branch; `b08fd9bb` fp64 usage detection; `1c2b8f97` RCP/RSQ/LOG clamp variants.
-- Texture/depth: `7e778987` tiled mip layout, `fecfbed0` color/stencil association,
-  `626f3ace` stencil-only depth targets, `92c7a884` D32↔D32S8 copies, `b3d46e96` mip copies.
-- Large refactors, deliberately not merged: `e6faa2e3` garbage collector part 2, `8e23388a`
-  renderer optimizations, `4ddaada8` num buffers, `fca10b26` remove batching.
+Continuam exigindo avaliacao especifica: layout de mips tiled (`7e778987`), associacao
+color/stencil (`fecfbed0`), stencil-only (`626f3ace`), copias D32/D32S8 (`92c7a884`), copias
+de todos os mips (`b3d46e96`), LDS singleton (`08225c2b`) e gradientes/offsets 1D (`e754ce62`).
+Nao importar em bloco GC2 (`e6faa2e3`), renderer optimizations (`8e23388a`), numero de buffers
+(`4ddaada8`) ou remocao de batching (`fca10b26`). O port divergiu em backing memory, readback,
+guardas de stack, twins depth/colour e comandos adiados.
 
-## Stopping point (2026-10-25)
+A investigacao antiga de `0x490a0` e historica; o estado mais recente esta em
+[CRASH-NVIDIA-2026-10-25.md](CRASH-NVIDIA-2026-10-25.md) e no
+[guia de estabilidade/CPU](STABILITY-CPU-2026-10-25.md). A sessao do jogador com saida 0
+nao comprova estabilidade total e tampouco impede investigar defeitos demonstraveis por
+testes de codigo. Nao atribuir avisos genericos a uma causa sem evidencia.
 
-Ten fixes were taken (the table above). The rest of the 98 commits fall into three groups and
-none should be merged without a Windows run:
+## Regras de integracao
 
-1. **Already in SotC** — checked and listed above.
-2. **Texture/depth refactors** (`7e778987`, `fecfbed0`, `626f3ace`, `92c7a884`, `b3d46e96`,
-   `e6faa2e3`, `8e23388a`): SotC's texture cache, depth/stencil association and buffer cache have
-   diverged heavily (parked twins, guest-stack tracking, GPU readbacks). Applying the upstream
-   hunks in isolation would either not compile or silently change behaviour that only a run can
-   validate.
-3. **Instruction coverage that SotC may never hit** (`08225c2b`, `c1b26558` is in, `e754ce62`,
-   `f0ea8eb7` is in, …): safe in principle, but each one changes shader output and forces a cache
-   rebuild; there is no way to tell from the Linux side whether SotC's shaders use the path.
-
-The 0x490a0 crash is the missing piece for any further stability work: see
-`docs/sotc/CRASH-0x490a0.md`. Until a `.dmp` and `events.log` from a crash exist, more shader
-backports are guesses, not fixes.
-
-## Rule for taking an upstream fix
-
-1. Apply only the commit's own hunks; do not pull surrounding refactors.
-2. Keep SotC's `sotc:` comments and env switches intact.
-3. If shader output changes, bump `ShaderBinaryVersion` (the cache is rebuilt on first start).
-4. Build through `.github/workflows/build-windows.yml` before merging to `main`; a runtime change
-   also needs a Windows run from the player.
+1. Identificar o commit exato e suas dependencias; adaptar somente a correcao necessaria.
+2. Preservar comentarios `sotc:`/`bbport:`, switches de diagnostico e protecoes locais.
+3. Se a saida de shader mudar, incrementar `ShaderBinaryVersion` e documentar a recompilacao.
+4. Testar cada mudanca e executar o build Windows antes de integrar; distinguir testes
+   sem GPU de validacao de gameplay no PC do jogador.
