@@ -19,6 +19,7 @@
 #elif defined(_WIN32)
 #include <windows.h>
 #include "common/string_util.h"
+#include "common/win32_sleep_timer.h"
 #else
 #if defined(__Bitrig__) || defined(__DragonFly__) || defined(__FreeBSD__) || defined(__OpenBSD__)
 #include <pthread_np.h>
@@ -109,22 +110,8 @@ void SetCurrentThreadPriority(ThreadPriority new_priority) {
 
 bool AccurateSleep(const std::chrono::nanoseconds duration, std::chrono::nanoseconds* remaining,
                    const bool interruptible) {
-    const auto begin_sleep = std::chrono::high_resolution_clock::now();
-
-    LARGE_INTEGER interval{
-        .QuadPart = -1 * (duration.count() / 100u),
-    };
-    HANDLE timer = ::CreateWaitableTimer(NULL, TRUE, NULL);
-    SetWaitableTimer(timer, &interval, 0, NULL, NULL, 0);
-    const auto ret = WaitForSingleObjectEx(timer, INFINITE, interruptible);
-    ::CloseHandle(timer);
-
-    if (remaining) {
-        const auto end_sleep = std::chrono::high_resolution_clock::now();
-        const auto sleep_time = end_sleep - begin_sleep;
-        *remaining = duration > sleep_time ? duration - sleep_time : std::chrono::nanoseconds(0);
-    }
-    return ret == WAIT_OBJECT_0;
+    // sotc: upstream #5435, including failure fallback and APC reentrancy protection.
+    return Detail::Win32AccurateSleep(duration, remaining, interruptible);
 }
 
 #else

@@ -93,7 +93,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for test in overlay_frame_state cpu_usage ce_de_sync image_expansion; do
+          for test in overlay_frame_state cpu_usage ce_de_sync image_expansion sleep_timer; do
             g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread -I. -Igpu/shadps4 tests/test_${test}.cpp -o out/${test}-test
             timeout 30s out/${test}-test
           done

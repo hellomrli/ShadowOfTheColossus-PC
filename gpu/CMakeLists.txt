@@ -300,7 +300,7 @@ if (WIN32)
 endif()
 
 # Explicit test targets; neither launches the game nor needs a Vulkan device.
-foreach(test IN ITEMS overlay-frame-state cpu-usage ce-de-sync image-expansion)
+foreach(test IN ITEMS overlay-frame-state cpu-usage ce-de-sync image-expansion sleep-timer)
     string(REPLACE "-" "_" source "${test}")
     add_executable(${test}-test EXCLUDE_FROM_ALL ../tests/test_${source}.cpp)
     target_compile_options(${test}-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
@@ -309,6 +309,8 @@ endforeach()
 if (WIN32)
     target_compile_definitions(cpu-usage-test PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
     target_link_libraries(cpu-usage-test PRIVATE synchronization)
+    target_compile_definitions(sleep-timer-test PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+    target_link_libraries(sleep-timer-test PRIVATE synchronization)
 endif()
 
 add_executable(recorded-external-test EXCLUDE_FROM_ALL ../tests/test_recorded_external.cpp
