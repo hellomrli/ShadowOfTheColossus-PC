@@ -7,6 +7,7 @@
 #include "common/incremental_id.h"
 #include "common/types.h"
 #include "video_core/renderer_vulkan/vk_common.h"
+#include "video_core/texture_cache/image_content.h"
 #include "video_core/texture_cache/image_info.h"
 #include "video_core/texture_cache/image_view.h"
 
@@ -25,18 +26,6 @@ VK_DEFINE_HANDLE(VmaAllocation)
 VK_DEFINE_HANDLE(VmaAllocator)
 
 namespace VideoCore {
-
-enum ImageFlagBits : u32 {
-    Empty = 0,
-    MaybeCpuDirty = 1 << 0, ///< The page this image is in was touched before the image address
-    CpuDirty = 1 << 1,      ///< Contents have been modified from the CPU
-    GpuDirty = 1 << 2, ///< Contents have been modified from the GPU (valid data in buffer cache)
-    Dirty = MaybeCpuDirty | CpuDirty | GpuDirty,
-    GpuModified = 1 << 3, ///< Contents have been modified from the GPU
-    Registered = 1 << 6,  ///< True when the image is registered
-    Picked = 1 << 7,      ///< Temporary flag to mark the image as picked
-};
-DECLARE_ENUM_FLAG_OPERATORS(ImageFlagBits)
 
 struct UniqueImage {
     explicit UniqueImage() = default;
@@ -116,7 +105,7 @@ struct Image {
     }
 
     bool SafeToDownload() const {
-        return True(flags & ImageFlagBits::GpuModified) && False(flags & (ImageFlagBits::Dirty));
+        return HasValidGpuContents(flags); // sotc: same predicate used by expansion (#5444).
     }
 
     void AssociateDepth(ImageId depth_image_id, u64 depth_image_uid) {

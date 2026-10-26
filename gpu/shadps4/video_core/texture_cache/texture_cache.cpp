@@ -658,8 +658,9 @@ ImageId TextureCache::ExpandImage(const ImageInfo& info, ImageId image_id) {
     auto& src_image = slot_images[image_id];
     auto& new_image = slot_images[new_image_id];
 
-    RefreshImage(new_image);
-    runtime.CopyImage(&src_image, &new_image);
+    // sotc: upstream #5444; CopyImage already propagates GpuModified for valid GPU contents.
+    RefreshExpandedContents(src_image.flags, [&] { RefreshImage(new_image); },
+                            [&] { runtime.CopyImage(&src_image, &new_image); });
 
     if (src_image.binding.is_bound || src_image.binding.is_target) {
         src_image.binding.needs_rebind = 1u;
