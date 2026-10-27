@@ -124,7 +124,7 @@ class PreparationCacheTests(unittest.TestCase):
         self.assertEqual(stop.exception.code, 0)
         self.assertEqual(scripts.call_args_list[0].args,
                          ('prepare.py', self.out / 'app-update', '--out', self.out,
-                          '--app0', self.game, '--update', self.update))
+                          '--app0', self.game.resolve(), '--update', self.update.resolve()))
 
 
 if __name__ == '__main__':
