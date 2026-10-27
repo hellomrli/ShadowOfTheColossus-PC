@@ -7,11 +7,12 @@ shadPS4 SotC. A base é o [bloodborne_pc](https://github.com/Supermedo/bloodborn
 
 Este pacote **não contém o jogo nem firmware da Sony**. Você precisa ter os seus.
 
-**0.67 (pre-release):** três correções adaptadas do shadPS4: guardas nas esperas CE/DE,
-preservação de texturas novas na expansão e reutilização de timers Windows por thread.
-Mantém as melhorias do gravador e a medição real de CPU da 0.66.
-O jogador pode manter FSR 1 + FSR 3; isso não promete estabilidade de todo o jogo nem ganho de FPS.
-Previews são baixadas manualmente, sem mudar o canal estável.
+**0.68 (pre-release):** diagnostico da preparacao com assinaturas reais do executavel,
+regiao informativa e recursos da base/atualizacao. Cada patch de FPS confere suas proprias
+instrucoes antes de escrever; metadados nao autorizam offsets de outra variante.
+Mantem as correcoes de estabilidade/CPU da 0.67, FSR 1 + FSR 3, DLSS e o cache de shaders.
+Nao confirma suporte a outro executavel nem estabilidade de todo o jogo ou ganho de FPS.
+Previews sao baixadas manualmente, sem mudar o canal estavel.
 
 ## Requisitos
 
@@ -143,6 +144,27 @@ normal o jogo roda travado em 30 FPS, como no PS4.
   o marcador de espera e o gravador de comandos Vulkan em thread própria (`cp_record_thread`).
 
 ## Diagnóstico
+
+### Relatorio de preparacao
+
+`out/analysis.json` descreve a preparacao, nao uma execucao bem-sucedida. A secao
+`compatibility` mostra os bytes esperados e encontrados nas assinaturas do layout EU 1.01,
+dentro de segmentos executaveis. `signature_matches` nao e verificacao do arquivo inteiro:
+cada patch de FPS solicitado tambem confere suas proprias instrucoes antes de escrever.
+`CUSA08809`, `01.01` e o nome da pasta nao autorizam patches. O prefixo `HP` de um
+`CONTENT_ID` como `HP9000-...AS` indica conteudo asiatico, mas nao prova compatibilidade ou
+incompatibilidade do codigo com os offsets EU. Nao altere os metadados para forcar patches.
+
+`resource_roots` mostra as pastas `dvdroot_ps4` da base e da atualizacao usadas na contagem.
+Os arquivos da atualizacao substituem os da base. A pequena pasta `out/app-update` nao contem
+os recursos e nao deve ser confundida com um dump completo. Contagem zero gera um aviso;
+a contagem e uma foto no momento da preparacao, nao uma verificacao de integridade do jogo.
+Alterar apenas recursos nao invalida o cache da imagem executavel.
+
+`bin/bb-probe.exe --vulkan-only` testa envio de comandos Vulkan e leitura de 4096 bytes,
+sem jogo. PASS nao valida shaders, apresentacao ou gameplay. O relatorio de preparacao mantem
+`validation.execution` e `validation.vulkan` como `not_run`; guarde a saida desse teste e o
+`user/last_run.log` da execucao real separadamente.
 
 ### Estabilidade e CPU
 

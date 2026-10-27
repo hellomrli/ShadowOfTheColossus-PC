@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 import tempfile
 import tkinter
+import sotc_compatibility
 
 from PIL import Image
 import sotc_update
@@ -15,11 +16,13 @@ def main():
     port = Path(sys.executable).resolve().parent
     for name in ('SotC.exe', 'bin/bb-probe.exe', 'bin/bb-gpu-capabilities.exe',
                  'bin/sotc_dlss.dll', 'bin/nvngx_dlss.dll', 'bin/licenses-nvidia/LICENSE.txt',
-                 'sotc.py', 'scripts/prepare.py', 'launcher/window_icon.ico',
+                 'sotc.py', 'scripts/prepare.py', 'scripts/sotc_compatibility.py', 'launcher/window_icon.ico',
                  'docs/sotc/CRASH-NVIDIA-2026-10-25.md', 'docs/sotc/DLSS.md',
                  'docs/sotc/STABILITY-CPU-2026-10-25.md',
                  'docs/sotc/UPSTREAM-REVIEW-2026-10-26.md', 'docs/sotc/UPSTREAM-BACKPORTS.md'):
         assert (port / name).is_file(), f'package missing {name}'
+    assert sotc_compatibility.content_region('HP9000-CUSA08809_00-SOTC0000000000AS') == 'Asia'
+    assert not sotc_compatibility.compatibility_report(b'', [])['signature_matches']
     assert sotc_update.RELEASES_URL == (
         'https://api.github.com/repos/hellomrli/ShadowOfTheColossus-PC/releases/latest')
     tcl_version = tkinter.Tcl().eval('info patchlevel')

@@ -3,13 +3,14 @@ import struct
 from sotc_modes import BASE, VERSION_CHECKS
 
 
-def executable(supported=True, eh=True):
+def executable(supported=True, eh=True, extra=()):
     segments = [(1, 5, address - BASE, original) for address, original in VERSION_CHECKS]
     if not supported:
         kind, flags, address, code = segments[0]
         segments[0] = (kind, flags, address, b'\x90' * len(code))
     if eh:
         segments.extend([(1, 4, 0x1500000, b'\0' * 32), (0x6474e550, 4, 0x1500000, b'\0' * 32)])
+    segments.extend(extra)
     data = bytearray(64 + 56 * len(segments))
     struct.pack_into('<16sHHIQQQIHHHHHH', data, 0, b'\x7fELF\x02\x01\x01\x09',
                      0xfe10, 62, 1, 0, 64, 0, 0, 64, 56, len(segments), 0, 0, 0)
@@ -20,8 +21,10 @@ def executable(supported=True, eh=True):
     return data
 
 
-def metadata(serial='CUSA08809', version='01.01'):
+def metadata(serial='CUSA08809', version='01.01', content_id=None):
     values = [('TITLE_ID', serial), ('APP_VER', version)]
+    if content_id is not None:
+        values.append(('CONTENT_ID', content_id))
     keys = b''
     payload = b''
     entries = b''

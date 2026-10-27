@@ -211,7 +211,8 @@ def main():
         # The scripts replace outputs in place; an interrupted rebuild must not keep an old
         # success stamp that could accept a mixture of outputs when the inputs change back.
         stamp.unlink(missing_ok=True)
-        run_script('prepare.py', source, '--out', out)
+        run_script('prepare.py', source, '--out', out, '--app0', game,
+                   *(['--update', update] if update else []))
         link = ['link_modules.py', source, '--out', out]
         if modules:
             link += ['--sys-modules', modules[0].parent]

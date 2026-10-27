@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.68 (pre-release) — 2026-10-27
+- **Diagnostico da preparacao:** `analysis.json` registra os bytes esperados/encontrados nas
+  duas assinaturas existentes do layout EU 1.01, apenas em segmentos executaveis. O relatorio
+  distingue essa verificacao parcial de uma verificacao do hash inteiro e de uma execucao real.
+- **Variantes do executavel:** prefixos como `HP` no `CONTENT_ID` sao pistas informativas de
+  regiao, nao autorizacao de patches. `CUSA08809` e `01.01` nao provam o layout do codigo.
+  Nenhum novo hash de eboot ou variante asiatica foi habilitado sem verificar seus bytes.
+- **Patches de FPS:** cada ponto solicitado, inclusive os tres do `fps60game`, precisa conter
+  suas proprias instrucoes originais antes de gerar os arquivos. Uma divergencia encerra a
+  preparacao dos modos, sem iniciar o jogo nem gravar um arquivo parcial de patches.
+- **Recursos da base/atualizacao:** o lancador informa as pastas reais `dvdroot_ps4` para a
+  contagem, em vez da pequena pasta de imagem `out/app-update`. Arquivos atualizados substituem
+  os da base; caminhos e avisos de recursos ausentes/vazios ficam no relatorio. E uma foto na
+  preparacao, nao uma verificacao de integridade nem um novo invalidante do cache executavel.
+- **Regressoes:** testes sinteticos de assinaturas e dos pontos de patch, inventario sobreposto,
+  relatorio completo e imports dos scripts fora do checkout; helper compartilhado incluido no
+  pacote/PyInstaller e smoke test. O CI executa os novos testes tambem no Windows.
+- **Sem mudancas no renderer:** preserva DLSS/FSR 3, configuracoes, protecoes de memoria, fixes
+  de estabilidade/CPU da 0.67 e cache de shaders (38). Validacao local: 105 testes Python
+  passaram, 29 foram pulados por plataforma/binario; cinco testes C++ passaram. O teste Vulkan
+  independente de envio/readback passou numa Intel UHD; nao testa shaders, apresentacao ou jogo.
+  Nenhum dump de jogo esta disponivel nesta maquina; gameplay ainda precisa de teste externo.
+
 ## 0.67 (pre-release) — 2026-10-26
 - **Tres backports de estabilidade/CPU:** revisao fixada no shadPS4 oficial
   `2cdefaa1298c6e4ece6c74bd84e90f3906282d51`. Integracao pequena, em commits separados;

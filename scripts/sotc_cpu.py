@@ -10,7 +10,7 @@ import argparse
 import struct
 from pathlib import Path
 from prepare import parse_self, sfo
-from sotc_modes import is_supported
+from sotc_compatibility import is_supported
 
 PT_GNU_EH_FRAME = 0x6474e550
 RED_ZONE_FUNCTIONS = {

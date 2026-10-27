@@ -11,6 +11,7 @@ import hashlib
 import json
 from pathlib import Path
 import struct
+from sotc_compatibility import compatibility_report, content_region
 
 
 def span(data, offset, size):
@@ -145,7 +146,23 @@ def inspect_libc(path):
     return evidence
 
 
-def prepare(game, out):
+def resource_inventory(app0, update=None):
+    """Count the files visible to /app0; update files replace their base versions."""
+    folders = [('base', app0 / 'dvdroot_ps4')]
+    if update is not None and update.resolve() != app0.resolve():
+        folders.append(('update', update / 'dvdroot_ps4'))
+    files, roots = {}, []
+    for role, root in folders:
+        roots.append(dict(role=role, path=str(root.resolve()), exists=root.is_dir()))
+        for path in root.rglob('*'):
+            if path.is_file():
+                files[path.relative_to(root)] = path.stat().st_size
+    resources = collections.Counter(path.parts[0] for path in files)
+    return dict(resources=dict(resources), resource_bytes=sum(files.values()), resource_roots=roots,
+                resource_scope='preparation snapshot of app0 plus update overlay; not a completeness check')
+
+
+def prepare(game, out, app0=None, update=None):
     source = (game / 'eboot.bin').read_bytes()
     elf, header, ph, segments, missing = parse_named_self(game / 'eboot.bin', source)
     loads = [p for p in ph if p['type'] in (1, 0x61000010)]
@@ -246,21 +263,31 @@ def prepare(game, out):
         f.write(image)
     (out / 'eboot.elf').write_bytes(elf)
     (out / 'entry.bin').write_bytes(image[:1024])
-    resources = collections.Counter()
-    total_bytes = 0
-    for path in (game / 'dvdroot_ps4').rglob('*'):
-        if path.is_file():
-            resources[path.relative_to(game / 'dvdroot_ps4').parts[0]] += 1
-            total_bytes += path.stat().st_size
+    inventory = resource_inventory(app0 if app0 is not None else game, update)
+    metadata = sfo((game / 'sce_sys/param.sfo').read_bytes())
+    compatibility = compatibility_report(elf, ph)
+    region = content_region(metadata.get('CONTENT_ID'))
+    warnings = []
+    if not inventory['resources']:
+        warnings.append('No game resources found under dvdroot_ps4. Check the base game path; '
+                        'an eboot/module-only or update-only folder is not a complete game dump.')
+    elif not inventory['resource_bytes']:
+        warnings.append('All game resource files are empty (0 bytes); check for an interrupted copy.')
+    if region not in ('Europe', 'unknown'):
+        warnings.append(f'CONTENT_ID publisher prefix indicates {region}; metadata does not verify '
+                        'the EU 1.01 executable layout or authorize fixed-address patches.')
+    if not compatibility['signature_matches']:
+        warnings.append('EU 1.01 executable signatures do not match; existing fixed-address modes '
+                        'and red-zone patches must remain disabled.')
     report = dict(source_sha256=hashlib.sha256(source).hexdigest(), source_bytes=len(source),
-                  sfo=sfo((game / 'sce_sys/param.sfo').read_bytes()), entry=hex(header[4]),
+                  sfo=metadata, content_region=region, compatibility=compatibility, entry=hex(header[4]),
                   image_bytes=size, program_headers=ph, self_segments=segments,
                   unavailable_metadata_headers=missing, needed=[string(v) for t, v in dyn if t == 1],
                   relocation_counts=dict(counts), import_count=len(names), imports=names,
                   import_name_hints={name: known[name.split('#')[0]] for name in names if name.split('#')[0] in known},
                   libc_evidence=libc_evidence,
                   bundled_modules=sorted(p.name for p in (game / 'sce_module').iterdir()),
-                  resources=dict(resources), resource_bytes=total_bytes,
+                  **inventory, warnings=warnings, validation=dict(execution='not_run', vulkan='not_run'),
                   status='Prepared only; execution and Vulkan are tested separately.')
     (out / 'analysis.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     print(f"{report['sfo'].get('TITLE')} | entry={header[4]:#x} | image={size:,} bytes")
@@ -268,14 +295,22 @@ def prepare(game, out):
     print(f"Unavailable non-loadable metadata headers: {missing}; not a byte-exact ELF reconstruction")
     print(f"Output: {out.resolve()}")
     print(f"libc _init_env verified RET: {libc_evidence['init_env_is_ret']}")
+    print(f"Executable signatures (EU 1.01 layout) match: {compatibility['signature_matches']}")
+    for check in compatibility['checks']:
+        if not check['matches']:
+            print(f"  {check['address']}: expected {check['expected']}, actual {check['actual'] or 'not executable/mapped'}")
+    for warning in warnings:
+        print(f'WARNING: {warning}')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('game', type=Path)
     parser.add_argument('--out', type=Path, default=Path(__file__).resolve().parent.parent / 'out')
+    parser.add_argument('--app0', type=Path, help='base game resource folder when game is a merged/update image')
+    parser.add_argument('--update', type=Path, help='update resource folder overlaid on app0')
     args = parser.parse_args()
     try:
-        prepare(args.game, args.out)
+        prepare(args.game, args.out, args.app0, args.update)
     except (ValueError, OSError, StopIteration, KeyError, IndexError) as error:
         parser.exit(1, f'prepare failed: {error}\n')

@@ -41,7 +41,13 @@ jobs:
 
       - name: Executable patch safety tests (Windows)
         if: runner.os == 'Windows'
-        run: python -m unittest discover -s tests -p test_sotc_cpu.py -v
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p test_sotc_cpu.py -v
+          python -m unittest discover -s tests -p test_sotc_compatibility.py -v
+          python -m unittest discover -s tests -p test_sotc_modes.py -v
+          python -m unittest discover -s tests -p test_prepare.py -v
 
       - name: Launcher regression tests (Windows)
         if: runner.os == 'Windows'

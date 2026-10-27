@@ -24,11 +24,9 @@ import re
 from pathlib import Path
 import struct
 from prepare import parse_self
+from sotc_compatibility import (BASE, CMDLINE_LEA, CMDLINE_ORIGINAL, VERSION_CHECKS,
+                                code_bytes, image_bytes, is_supported)
 
-BASE = 0x400000
-# The lea that loads the string the game appends to its command line ("+VSyncWindow=10%").
-CMDLINE_LEA = 0x009367b9
-CMDLINE_ORIGINAL = '+VSyncWindow=10%'
 # Code patches: mode -> [(address, expected original bytes, new bytes)]
 MODES = {
     'fps60': [
@@ -92,21 +90,16 @@ RENDER_SITES = [
     (0x0166633c, 'a', '398ee33f'),
 ]
 RT_POOL = 0x14280000
-# EU 1.01: the command line lea and the fps60 site.
-VERSION_CHECKS = [(CMDLINE_LEA, bytes.fromhex('488d352debad00')), (0x01390090, bytes.fromhex('ff25a20567'))]
 CVAR = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*(=[-+.0-9A-Za-z_%]+)?$')  # NAME=VALUE or a flag such as nointro
 
 
-def image_bytes(elf, ph, vaddr, length):
-    for p in ph:
-        if p['type'] in (1, 0x61000010) and p['vaddr'] <= vaddr and vaddr + length <= p['vaddr'] + p['filesz']:
-            offset = p['offset'] + vaddr - p['vaddr']
-            return bytes(elf[offset:offset + length])
-    return None
-
-
-def is_supported(elf, ph):
-    return all(image_bytes(elf, ph, address - BASE, len(original)) == original for address, original in VERSION_CHECKS)
+def mode_patches(elf, ph, mode):
+    writes = []
+    for address, original, data in MODES.get(mode, []):
+        if code_bytes(elf, ph, address - BASE, len(original)) != original:
+            raise SystemExit(f'Mode {mode}: unexpected original bytes at {address:#x}; not applied')
+        writes.append((address - BASE, data))
+    return writes
 
 
 def render_pool(w, h):
@@ -153,7 +146,7 @@ def main():
         if not supported:
             print(f'Mode {mode}: this eboot is not EU 1.01, not applied')
             continue
-        writes += [(address - BASE, data) for address, _, data in MODES.get(mode, [])]
+        writes += mode_patches(elf, ph, mode)
         cvars += CVAR_MODES.get(mode, [])
         print(f'Mode {mode}: on')
     if args.render and args.render != '1920x1080':

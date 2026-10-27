@@ -1,19 +1,22 @@
-# Shadow of the Colossus — PC native port · v0.67 (preview)
+# Shadow of the Colossus — PC native port · v0.68 (preview)
 
 [Releases](../../releases) · [Changelog](CHANGELOG.md)
 
-**v0.67 is a prerelease of this fork, focused on stability and CPU efficiency.** It adapts
-three shadPS4 fixes: CE/DE wait guards, fresh texture preservation during expansion, and
-per-thread Windows sleep timers. It keeps 0.66's event-driven recorder and actual CPU telemetry.
-FSR 1 + FSR 3 settings and DLSS are unchanged; gameplay stability and CPU/FPS gains still need testing. Download previews
-manually from Releases: the launcher's updater follows this fork's stable releases, not previews
-or upstream releases. Keep a backup of `user/` and `sotc.ini` when moving to a new directory.
+**v0.68 is a prerelease of this fork, focused on preparation diagnostics and patch safety.**
+It reports actual executable signatures, distinguishes content-region metadata from code
+compatibility, checks every requested FPS patch site and counts the real base/update resources.
+It keeps 0.67's stability/CPU fixes. FSR 1 + FSR 3 settings, DLSS and the shader cache are unchanged;
+these diagnostics do not establish support for another executable variant or validate gameplay.
+Download previews manually from Releases: the launcher's updater follows this fork's stable
+releases, not previews or upstream releases. Keep a backup of `user/` and `sotc.ini` when moving
+to a new directory.
 
-**A v0.67 e uma pre-release deste fork, com foco em estabilidade e CPU.** Adapta tres
-correcoes do shadPS4: esperas CE/DE, preservacao de texturas novas e timers Windows por thread.
-Mantem FSR 1 + FSR 3 e as protecoes locais; nao garante estabilidade de todo o jogo nem ganho
-de FPS. [Plano e verificacao](docs/sotc/STABILITY-CPU-2026-10-25.md) e
-[revisao do upstream](docs/sotc/UPSTREAM-REVIEW-2026-10-26.md).
+**A v0.68 e uma pre-release deste fork, com diagnostico da preparacao e patches mais seguros.**
+Confere os bytes de cada patch de FPS e mostra assinaturas, regiao informativa e recursos da
+base/atualizacao no relatorio. Mantem as correcoes de estabilidade/CPU da 0.67, FSR 1 + FSR 3,
+DLSS e as protecoes locais. Nao confirma suporte a outro executavel nem estabilidade do jogo.
+[Diagnostico](#preparation-diagnostics), [plano de estabilidade/CPU](docs/sotc/STABILITY-CPU-2026-10-25.md)
+e [revisao do upstream](docs/sotc/UPSTREAM-REVIEW-2026-10-26.md).
 
 > **No game or Sony files are included.** You need your own game dump and, for sound, two
 > modules from your own console. This project is not affiliated with Sony Interactive
@@ -33,6 +36,7 @@ game needs, in the style of [bloodborne_pc](https://github.com/Supermedo/bloodbo
 
 | Version | Improvements and fixes |
 |---|---|
+| **0.68 (preview)** | **Preparation diagnostics and patch safety:** expected/observed executable signatures, informational content-region hints, real base/update resource inventory and per-site original-byte checks for FPS patches. No new executable-variant whitelist or renderer changes. |
 | **0.67 (preview)** | Three focused shadPS4 backports: **CE/DE wait guards** (#5406), **no stale texture overwrite during expansion** (#5444), and **reused Windows high-resolution timers** (#5435) with failure fallback and APC reentry protection. No shader-cache, DLSS/FSR 3 or memory-protection changes. |
 | **0.66 (preview)** | **Event-driven idle recorder**, chunk-boundary wakeup and final-chunk cleanup; **actual process/thread CPU telemetry**, immediate loading-dismissal logs and atomic dialog flags. No-GPU wakeup, lifetime and UI-state tests. Stability/CPU first; no new DLSS features or shader-cache changes. |
 | **0.65 (preview)** | **Real Vulkan command buffers for DLSS**, with ordered creation/evaluation on the recording thread and synchronous fallback results; NGX crash-context labels, balanced debug labels on failure and a no-GPU regression using the production recorder. A later RTX 3070 run created DLAA and exited normally; no renderer-default or shader-cache changes. |
@@ -234,6 +238,32 @@ The Windows build also runs real waitable timers, nested APC sleeps and thread-e
 checks. These tests do not run the full PM4 processor or validate Vulkan texture rendering.
 Current native-test gaps and Windows verification steps are recorded in the
 [review notes](docs/sotc/REVIEW-2026-10-25.md).
+
+### Preparation diagnostics
+
+`out/analysis.json` describes preparation, not a successful game run. Its `compatibility`
+section records the expected and observed bytes at the existing EU 1.01 layout signatures,
+inside executable segments. `signature_matches` is not whole-file verification or proof that
+every patch applies: each requested FPS code patch also checks its own original instructions.
+Neither `TITLE_ID=CUSA08809`, `APP_VER=01.01`, nor the directory name authorizes a patch.
+An `HP` publisher prefix (for example `HP9000-...AS`) is an Asian content hint, not proof that
+the executable shares or differs from the EU layout. Do not change metadata to force it.
+
+`resource_roots` records the actual base/update `dvdroot_ps4` folders. Resource counts and bytes
+are a preparation-time snapshot of the update overlay, not a complete-dump check. An empty
+inventory warns about a missing/wrong base path or an executable-only dump. The launcher's
+small `out/app-update` directory intentionally has no game assets; it is no longer used as
+the resource root. Resource changes alone do not invalidate the executable preparation cache.
+
+Re-run `python scripts/prepare.py "path/to/game" --out out` to obtain these diagnostics.
+When inspecting an update/merged executable separately, add `--app0 "path/to/base-game"`
+and, if applicable, `--update "path/to/update"`. This command only prepares the image; it
+does not link modules, launch the game or test Vulkan.
+
+`out/bb-probe.exe --vulkan-only` (or `bin/bb-probe.exe` in a Windows package) independently
+tests a Vulkan command submission and 4096-byte readback. This is not a shader, presentation
+or gameplay test. Preparation leaves `validation.execution` and `validation.vulkan` as
+`not_run`; keep the Vulkan output and a real `user/last_run.log` as separate evidence.
 
 ## Credits
 

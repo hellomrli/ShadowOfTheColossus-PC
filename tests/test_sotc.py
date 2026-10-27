@@ -112,6 +112,20 @@ class PreparationCacheTests(unittest.TestCase):
                 sotc.main()
         self.assertFalse(stamp.exists())
 
+    def test_preparation_receives_base_resources_separately_from_the_merged_image(self):
+        self.addCleanup(os.chdir, Path.cwd())
+        with patch.object(sotc, 'PORT', self.root), \
+                patch.dict(os.environ, {'SOTC_GAME_DIR': str(self.game),
+                                        'SOTC_UPDATE_DIR': str(self.update)}, clear=True), \
+                patch.object(sotc, 'run_script') as scripts, \
+                patch.object(sotc, 'find_probe', side_effect=SystemExit(0)):
+            with self.assertRaises(SystemExit) as stop:
+                sotc.main()
+        self.assertEqual(stop.exception.code, 0)
+        self.assertEqual(scripts.call_args_list[0].args,
+                         ('prepare.py', self.out / 'app-update', '--out', self.out,
+                          '--app0', self.game, '--update', self.update))
+
 
 if __name__ == '__main__':
     unittest.main()

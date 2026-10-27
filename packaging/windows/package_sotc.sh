@@ -13,9 +13,9 @@ export PATH="$clang64/bin:${MSYS2_ROOT%/}/usr/bin:$PATH"
 [[ -f out/bb-probe.exe && -f out/bb-gpu-capabilities.exe ]] || { echo 'Build first: bash build.sh' >&2; exit 1; }
 python=${WINPYTHON:-/c/PyBuild312/python.exe}
 "$python" -m PyInstaller --version >/dev/null || { echo "Need PyInstaller in $python (WINPYTHON)" >&2; exit 1; }
-# The scripts run inside SotC.exe (--script): the standard modules they import come along.
+# The scripts run inside SotC.exe (--script): include their standard modules and shared helper.
 hidden=()
-for module in argparse base64 collections hashlib json re shutil struct; do
+for module in argparse base64 collections hashlib json re shutil struct sotc_compatibility; do
     hidden+=(--hidden-import "$module")
 done
 "$python" -m PyInstaller --noconfirm --clean --log-level WARN --windowed --name SotC \
@@ -83,7 +83,7 @@ fi
     --objdump "$(cygpath -w "$(command -v llvm-objdump)")"
 cp -r "$clang64/share/licenses" "$dest/bin/licenses-msys2"
 cp scripts/prepare.py scripts/link_libc.py scripts/link_modules.py scripts/content_profile.py \
-   scripts/sotc_cpu.py scripts/sotc_modes.py "$dest/scripts/"
+   scripts/sotc_cpu.py scripts/sotc_modes.py scripts/sotc_compatibility.py "$dest/scripts/"
 cp sotc.py SotC.bat LICENSE CHANGELOG.md "$dest/"
 cp docs/sotc/README-SotC.md "$dest/README.md"
 mkdir -p "$dest/docs/sotc"
